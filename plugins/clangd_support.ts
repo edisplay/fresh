@@ -8,6 +8,8 @@
  *  - Open project .clangd configuration file
  */
 
+import { PanelManager } from "./lib/index.ts";
+
 const languageMap: Record<string, string> = {
   c: "cpp",
   h: "cpp",
@@ -87,6 +89,168 @@ globalThis.clangdSwitchSourceHeader = async function(): Promise<void> {
     editor.debug(`clangdSwitchSourceHeader error: ${err}`);
   }
 };
+
+const projectPanel = new PanelManager("Clangd project setup", "clangd-project-setup");
+
+function pathDesc(path: string): string {
+  if (!path) {
+    return "unknown";
+  }
+  return path;
+}
+
+function detectProjectRoot(): string | null {
+  const roots = new Set<string>();
+  const cwd = editor.getCwd();
+  if (cwd) {
+    roots.add(cwd);
+  }
+  const bufferId = editor.getActiveBufferId();
+  const bufferPath = editor.getBufferPath(bufferId);
+  if (bufferPath) {
+    // Add the buffer directory and a few ancestors
+    let current = editor.pathDirname(bufferPath);
+    let depth = 0;
+    while (current && depth < 5) {
+      roots.add(current);
+      current = editor.pathDirname(current);
+      depth += 1;
+    }
+  }
+  if (roots.size === 0) {
+    return null;
+  }
+  return Array.from(roots)[0];
+}
+
+function analyzeProject(root: string | null) {
+  const lines: string[] = [];
+  const dirCandidates: string[] = [];
+  if (root) {
+    dirCandidates.push(root);
+  }
+  const currentDir = editor.getCwd();
+  if (currentDir && currentDir !== root) {
+    dirCandidates.push(currentDir);
+  }
+  const activeBufferId = editor.getActiveBufferId();
+  const bufferPath = editor.getBufferPath(activeBufferId);
+  if (bufferPath) {
+    const bufferDir = editor.pathDirname(bufferPath);
+    if (bufferDir && !dirCandidates.includes(bufferDir)) {
+      dirCandidates.push(bufferDir);
+    }
+  }
+
+  const compileCandidates = [
+    "compile_commands.json",
+    "build/compile_commands.json",
+    "out/compile_commands.json",
+    "cmake-build-debug/compile_commands.json",
+  ];
+  let compilePath: string | null = null;
+  for (const base of dirCandidates) {
+    for (const relative of compileCandidates) {
+      const candidate = editor.pathJoin(base, relative);
+      if (editor.fileExists(candidate)) {
+        compilePath = candidate;
+        break;
+      }
+    }
+    if (compilePath) {
+      break;
+    }
+  }
+
+  const clangdFileCandidates = [".clangd", ".clangd/compile_flags.txt"];
+  let clangdPath: string | null = null;
+  for (const base of dirCandidates) {
+    for (const relative of clangdFileCandidates) {
+      const candidate = editor.pathJoin(base, relative);
+      if (editor.fileExists(candidate)) {
+        clangdPath = candidate;
+        break;
+      }
+    }
+    if (clangdPath) {
+      break;
+    }
+  }
+
+  const status: string[] = [];
+  if (root) {
+    status.push(`Project root: ${root}`);
+  } else {
+    status.push("Project root: (unknown)");
+  }
+  status.push("");
+
+  if (compilePath) {
+    status.push(`Compile commands: ready (${compilePath})`);
+  } else {
+    status.push("Compile commands: missing");
+    status.push("  Tip: run `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON` or `bear -- make` to generate compile_commands.json and place it at the project root.");
+  }
+
+  if (clangdPath) {
+    status.push(`.clangd configuration: ${clangdPath}`);
+  } else {
+    status.push(".clangd configuration: missing");
+    status.push("  Tip: create a .clangd file to customize clangd flags, fallback file, etc.");
+  }
+
+  const buildHints: string[] = [];
+  if (root) {
+    if (editor.fileExists(editor.pathJoin(root, "CMakeLists.txt"))) {
+      buildHints.push("CMake project detected (configure with `cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`).");
+    }
+    if (
+      editor.fileExists(editor.pathJoin(root, "WORKSPACE")) ||
+      editor.fileExists(editor.pathJoin(root, "WORKSPACE.bazel")) ||
+      editor.fileExists(editor.pathJoin(root, "BUILD.bazel"))
+    ) {
+      buildHints.push("Bazel project detected (use `bazel build //...` and attach the generated compile_commands.json).");
+    }
+    if (editor.fileExists(editor.pathJoin(root, "Makefile"))) {
+      buildHints.push("Makefile detected (run `bear -- make` or `intercept-build make` to emit compile_commands.json).");
+    }
+  }
+  if (buildHints.length > 0) {
+    status.push("");
+    status.push("Build system hints:");
+    for (const hint of buildHints) {
+      status.push(`  - ${hint}`);
+    }
+  }
+
+  status.push("");
+  status.push("General tips:");
+  status.push("  * Place compile_commands.json at the project root or point clangd to a custom path.");
+  status.push("  * Use `Clangd: Open Project Config` to edit project-specific overrides.");
+  status.push("  * Use `Clangd: Switch Source/Header` once compile data is available.");
+
+  return status;
+}
+
+globalThis.clangdProjectSetup = async function (): Promise<void> {
+  const projectRoot = detectProjectRoot();
+  const summary = analyzeProject(projectRoot);
+  const entries = summary.map((line) => ({
+    text: line + "\n",
+    properties: {},
+  }));
+  await projectPanel.open({
+    entries,
+    ratio: 0.3,
+  });
+};
+
+editor.registerCommand(
+  "Clangd: Project Setup",
+  "Analyze clangd readiness (compile_commands.json, .clangd)",
+  "clangdProjectSetup",
+  "global"
+);
 
 globalThis.clangdOpenProjectConfig = function(): void {
   const bufferId = editor.getActiveBufferId();

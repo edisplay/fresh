@@ -14,3 +14,7 @@ Those commands are registered in the command palette after the plugin loads; Typ
 The plugin listens for `lsp/custom_notification` events emitted by the core and filters for clangd-specific methods (`textDocument/clangd.fileStatus`, `$/memoryUsage`, etc.). When clangd sends `textDocument/clangd.fileStatus`, the plugin surfaces it as a status message (`Clangd file status: …`). The editor renders this plugin-provided status slot alongside the usual diagnostics/cursor info, so the notification stays visible without overwriting core messages.
 
 Use `editor.setStatus` to set a plugin status message and `editor.setStatus("")` to clear it; the core `Editor::set_status_message` call clears the plugin slot so core actions regain priority.
+
+## Project setup heuristic
+
+`Clangd: Project Setup` opens a readonly panel that inspects the current workspace root and reports whether the files clangd needs are present (`compile_commands.json`, `.clangd`, etc.). The panel also guesses the build system (CMake, Bazel, Make) by looking for markers like `CMakeLists.txt` or `WORKSPACE` and prints quick tips for generating the missing artifacts (e.g., `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON build`, `bear -- make`). This panel gives you a quick readiness check before enabling heavier clangd features on projects such as Lustre or other Makefile-heavy trees.
