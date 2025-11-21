@@ -661,6 +661,9 @@ impl Editor {
                             self.active_state_mut().margins.set_line_numbers(false);
                         }
                         crate::state::ViewMode::Source => {
+                            // Clear compose width to remove margins
+                            vs.compose_width = None;
+                            vs.view_transform = None;
                             let restore = vs
                                 .compose_prev_line_numbers
                                 .take()
@@ -679,6 +682,11 @@ impl Editor {
                         crate::state::ViewMode::Compose => false,
                         crate::state::ViewMode::Source => default_wrap,
                     };
+                    // Clear compose state when switching to Source mode
+                    if matches!(view_mode, crate::state::ViewMode::Source) {
+                        state.compose_width = None;
+                        state.view_transform = None;
+                    }
                 }
 
                 let mode_label = match view_mode {
