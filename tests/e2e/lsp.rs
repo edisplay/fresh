@@ -1592,6 +1592,7 @@ fn test_lsp_diagnostics_non_blocking() -> std::io::Result<()> {
                 .to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -1747,6 +1748,7 @@ fn test_rust_analyzer_rename_real_scenario() -> std::io::Result<()> {
                 ra_log_file.to_string_lossy().to_string(),
             ],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -2349,6 +2351,7 @@ fn test_lsp_progress_status_display() -> std::io::Result<()> {
                 .to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -2503,6 +2506,7 @@ fn test_lsp_crash_detection_and_restart() -> std::io::Result<()> {
                 .to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -2796,6 +2800,7 @@ fn test_pull_diagnostics_auto_trigger_after_open() -> std::io::Result<()> {
                 .to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -2871,6 +2876,7 @@ fn test_pull_diagnostics_result_id_tracking() -> std::io::Result<()> {
                 .to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );
@@ -3080,6 +3086,7 @@ done
             command: script_path.to_string_lossy().to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: fresh::process_limits::ProcessLimits::default(),
         },
     );

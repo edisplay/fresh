@@ -1759,6 +1759,7 @@ fn test_clangd_plugin_file_status_notification() -> std::io::Result<()> {
             command: FakeLspServer::script_path().to_string_lossy().to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: ProcessLimits::default(),
         },
     );
@@ -1842,6 +1843,7 @@ fn test_clangd_plugin_switch_source_header() -> std::io::Result<()> {
             command: FakeLspServer::script_path().to_string_lossy().to_string(),
             args: vec![],
             enabled: true,
+            auto_start: false,
             process_limits: ProcessLimits::default(),
         },
     );

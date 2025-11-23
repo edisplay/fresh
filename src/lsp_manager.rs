@@ -484,6 +484,7 @@ mod tests {
             command: "rust-analyzer".to_string(),
             args: vec![],
             process_limits: crate::process_limits::ProcessLimits::unlimited(),
+            auto_start: false,
         };
 
         manager.set_language_config("rust".to_string(), config);
@@ -505,6 +506,7 @@ mod tests {
                 command: "rust-analyzer".to_string(),
                 args: vec![],
                 process_limits: crate::process_limits::ProcessLimits::unlimited(),
+                auto_start: false,
             },
         );
 
@@ -542,6 +544,7 @@ mod tests {
                 command: "rust-analyzer".to_string(),
                 args: vec![],
                 process_limits: crate::process_limits::ProcessLimits::unlimited(),
+                auto_start: false,
             },
         );
 

@@ -479,11 +479,38 @@ impl Editor {
             }
         };
 
-        // Load TypeScript plugins from plugins directory
+        // Load TypeScript plugins from multiple directories:
+        // 1. Next to the executable (for cargo-dist installations)
+        // 2. In the working directory (for development/local usage)
         let ts_plugin_manager = ts_plugin_manager;
         if let Some(ref manager) = ts_plugin_manager {
-            let plugin_dir = working_dir.join("plugins");
-            if plugin_dir.exists() {
+            let mut plugin_dirs: Vec<std::path::PathBuf> = vec![];
+
+            // Check next to executable first (for cargo-dist installations)
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let exe_plugin_dir = exe_dir.join("plugins");
+                    if exe_plugin_dir.exists() {
+                        plugin_dirs.push(exe_plugin_dir);
+                    }
+                }
+            }
+
+            // Then check working directory (for development)
+            let working_plugin_dir = working_dir.join("plugins");
+            if working_plugin_dir.exists() && !plugin_dirs.contains(&working_plugin_dir) {
+                plugin_dirs.push(working_plugin_dir);
+            }
+
+            if plugin_dirs.is_empty() {
+                tracing::debug!(
+                    "No plugins directory found next to executable or in working dir: {:?}",
+                    working_dir
+                );
+            }
+
+            // Load from all found plugin directories
+            for plugin_dir in plugin_dirs {
                 tracing::info!("Loading TypeScript plugins from: {:?}", plugin_dir);
                 let errors = manager.load_plugins_from_dir(&plugin_dir);
                 if !errors.is_empty() {
@@ -498,8 +525,6 @@ impl Editor {
                         errors.join("; ")
                     );
                 }
-            } else {
-                tracing::debug!("No plugins directory found at: {:?}", plugin_dir);
             }
         }
 
