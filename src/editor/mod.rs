@@ -4697,6 +4697,14 @@ impl Editor {
                 match self.split_manager.set_split_buffer(split_id, buffer_id) {
                     Ok(()) => {
                         tracing::info!("Set split {:?} to buffer {:?}", split_id, buffer_id);
+
+                        // Clear any view transform for this split when buffer changes
+                        // The transform was for the old buffer and shouldn't apply to the new one
+                        if let Some(view_state) = self.split_view_states.get_mut(&split_id) {
+                            view_state.view_transform = None;
+                            view_state.compose_width = None;
+                        }
+
                         // If this is the active split, update active buffer with all side effects
                         if self.split_manager.active_split() == split_id {
                             self.set_active_buffer(buffer_id);

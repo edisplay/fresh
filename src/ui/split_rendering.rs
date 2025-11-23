@@ -1104,19 +1104,46 @@ impl SplitRenderer {
                 break;
             }
 
-            // Check if this is a wrapped continuation line
-            // A continuation line comes AFTER a Break token's newline (which has None mapping)
-            // So check if the previous character (the newline) was a Break
-            let is_continuation = if line_view_offset > 0 {
-                view_mapping.get(line_view_offset - 1) == Some(&None)
+            // Determine line type for line number rendering:
+            // 1. Normal source line: first char has source_offset: Some(...) AND prev newline had Some(...)
+            // 2. Wrapped continuation: first char has source_offset: Some(...) BUT prev newline had None (Break)
+            // 3. Injected line: first char has source_offset: None (header/annotation)
+            //
+            // For line numbers:
+            // - Normal source line: show line number, increment counter
+            // - Wrapped continuation: show blank (same logical line), don't increment
+            // - Injected line: show blank (not a source line), don't increment
+            let first_char_has_source = view_mapping
+                .get(line_view_offset)
+                .map(|m| m.is_some())
+                .unwrap_or(false);
+
+            let prev_newline_has_source = if line_view_offset > 0 {
+                view_mapping
+                    .get(line_view_offset - 1)
+                    .map(|m| m.is_some())
+                    .unwrap_or(false)
             } else {
-                false // First line is never a continuation
+                true // First line counts as having a "previous" source
             };
 
-            // Only increment source line number if this is NOT a continuation
-            if !is_continuation && lines_rendered > 0 {
+            // This is a continuation if: prev newline was None AND current content is real source
+            // (meaning this is a wrapped line, not after an injected header)
+            let is_continuation = !prev_newline_has_source && first_char_has_source;
+
+            // This is an injected line if the first char has no source mapping
+            let is_injected_line = !first_char_has_source;
+
+            // Only increment source line number for normal source lines (not continuations or injected)
+            // A line is a new source line if: it has source content AND prev newline had source
+            let is_new_source_line = first_char_has_source && prev_newline_has_source && lines_rendered > 0;
+            if is_new_source_line {
                 current_source_line_num += 1;
             }
+
+            // For rendering purposes, treat both injected and continuation lines as "continuation"
+            // (both show blank line numbers)
+            let is_continuation = is_continuation || is_injected_line;
 
             lines_rendered += 1;
 
