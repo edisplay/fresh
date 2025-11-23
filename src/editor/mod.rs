@@ -334,6 +334,10 @@ pub struct Editor {
     /// Last known modification times for watched files (for conflict detection)
     /// Maps file path to last known modification time
     file_mod_times: HashMap<PathBuf, std::time::SystemTime>,
+
+    /// Last time each file was auto-reverted (for debouncing rapid file changes)
+    /// Maps file path to the last revert time
+    file_last_revert_times: HashMap<PathBuf, std::time::Instant>,
 }
 
 impl Editor {
@@ -633,6 +637,7 @@ impl Editor {
             file_watcher: None,
             watched_dirs: HashSet::new(),
             file_mod_times: HashMap::new(),
+            file_last_revert_times: HashMap::new(),
         })
     }
 
@@ -2235,13 +2240,22 @@ impl Editor {
             return Ok(false);
         }
 
+        // Save scroll position before reloading
+        let old_top_byte = self.active_state().viewport.top_byte;
+        let old_left_column = self.active_state().viewport.left_column;
+
         // Load the file content fresh from disk
-        let new_state = EditorState::from_file(
+        let mut new_state = EditorState::from_file(
             &path,
             self.terminal_width,
             self.terminal_height,
             self.config.editor.large_file_threshold_bytes as usize,
         )?;
+
+        // Restore scroll position (clamped to valid range for new file size)
+        let new_file_size = new_state.buffer.len();
+        new_state.viewport.top_byte = old_top_byte.min(new_file_size);
+        new_state.viewport.left_column = old_left_column;
 
         // Replace the current buffer with the new state
         let buffer_id = self.active_buffer;
@@ -2430,7 +2444,23 @@ impl Editor {
 
     /// Handle a file change notification (from file watcher)
     pub fn handle_file_changed(&mut self, changed_path: &str) {
+        use std::time::{Duration, Instant};
+
+        const DEBOUNCE_DURATION: Duration = Duration::from_secs(1);
+
         let path = PathBuf::from(changed_path);
+
+        // Debounce: skip if we reverted this file recently (within 1 second)
+        if let Some(last_revert) = self.file_last_revert_times.get(&path) {
+            if last_revert.elapsed() < DEBOUNCE_DURATION {
+                tracing::debug!(
+                    "Skipping file change for {:?} (debounced, {}ms since last revert)",
+                    path,
+                    last_revert.elapsed().as_millis()
+                );
+                return;
+            }
+        }
 
         // Find buffers that have this file open
         let buffer_ids: Vec<BufferId> = self
@@ -2487,6 +2517,8 @@ impl Editor {
                     tracing::error!("Failed to auto-revert file {:?}: {}", path, e);
                 } else {
                     tracing::info!("Auto-reverted file: {:?}", path);
+                    // Record revert time for debouncing
+                    self.file_last_revert_times.insert(path.clone(), Instant::now());
                 }
 
                 // Switch back to original buffer
