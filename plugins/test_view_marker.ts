@@ -9,6 +9,7 @@
 
 let activeBufferId: number | null = null;
 const padLinesByBuffer = new Map<number, number>();
+const interleavedModeByBuffer = new Map<number, boolean>();
 
 // Define a simple mode for testing
 editor.defineMode(
@@ -37,6 +38,7 @@ globalThis.onTestViewMarkerTransform = function(args: {
 
   editor.debug(`[test_view_marker] transform request: viewport=${args.viewport_start}-${args.viewport_end}, tokens=${args.tokens.length}`);
   const padLines = padLinesByBuffer.get(args.buffer_id) ?? 0;
+  const interleavedMode = interleavedModeByBuffer.get(args.buffer_id) ?? false;
 
   // Log first few tokens for debugging
   for (let i = 0; i < Math.min(3, args.tokens.length); i++) {
@@ -51,10 +53,14 @@ globalThis.onTestViewMarkerTransform = function(args: {
   for (const token of args.tokens) {
     const byteOffset = token.source_offset;
 
-    // Inject header before the first token at byte 0
-    if (byteOffset === 0 && !headerInjected) {
-      const headerText = "== HEADER AT BYTE 0 ==";
-      editor.debug(`[test_view_marker] INJECTING header: "${headerText}"`);
+    // Inject header before the first token
+    // - at byte 0 for non-interleaved mode
+    // - always for interleaved mode (before any content)
+    // Note: byteOffset can be null for tokens without source mapping
+    const isAtByteZero = byteOffset === 0;
+    if (!headerInjected && (isAtByteZero || interleavedMode)) {
+      const headerText = interleavedMode ? "== INTERLEAVED HEADER ==" : "== HEADER AT BYTE 0 ==";
+      editor.debug(`[test_view_marker] interleavedMode=${interleavedMode}, injecting header: ${headerText}`);
 
       // Add header token (source_offset: null = no line number)
       transformed.push({
@@ -110,6 +116,31 @@ globalThis.onTestViewMarkerTransform = function(args: {
 
     // Pass through the original token
     transformed.push(token);
+
+    // In interleaved mode, inject a header after each Newline token
+    if (interleavedMode && token.kind === "Newline") {
+      const lineNum = transformed.filter(t => t.kind === "Newline").length;
+      transformed.push({
+        source_offset: null,
+        kind: { Text: `── Header before line ${lineNum + 1} ──` },
+        style: {
+          fg: [200, 200, 100],
+          bg: [40, 40, 40],
+          bold: true,
+          italic: false,
+        },
+      });
+      transformed.push({
+        source_offset: null,
+        kind: "Newline",
+        style: {
+          fg: [255, 255, 255],
+          bg: null,
+          bold: false,
+          italic: false,
+        },
+      });
+    }
   }
 
   // Log first few output tokens
@@ -172,12 +203,51 @@ async function open_test_view_marker(padLines: number, name: string): Promise<vo
   }
 }
 
+async function open_test_view_marker_interleaved(name: string): Promise<void> {
+  const splitId = editor.getActiveSplitId();
+
+  editor.debug(`[test_view_marker] opening interleaved view marker in split ${splitId}`);
+
+  // Create virtual buffer with simple hardcoded content
+  const entries: TextPropertyEntry[] = [
+    { text: "Line 1\n", properties: { type: "content", line: 1 } },
+    { text: "Line 2\n", properties: { type: "content", line: 2 } },
+    { text: "Line 3\n", properties: { type: "content", line: 3 } },
+  ];
+
+  const bufferId = await editor.createVirtualBufferInExistingSplit({
+    name,
+    mode: "test-view-marker",
+    read_only: true,
+    entries,
+    split_id: splitId,
+    show_line_numbers: true,
+    show_cursors: true,
+    editing_disabled: true,
+  });
+
+  if (bufferId !== null) {
+    activeBufferId = bufferId;
+    padLinesByBuffer.set(bufferId, 0);
+    interleavedModeByBuffer.set(bufferId, true);
+    editor.debug(`[test_view_marker] interleaved buffer created with id ${bufferId}`);
+    editor.setStatus("Test view marker (interleaved) active - press q to close");
+  } else {
+    editor.debug(`[test_view_marker] failed to create buffer`);
+    editor.setStatus("Failed to create test view marker buffer");
+  }
+}
+
 globalThis.show_test_view_marker = async function(): Promise<void> {
   await open_test_view_marker(0, "*test-view-marker*");
 };
 
 globalThis.show_test_view_marker_many_virtual_lines = async function(): Promise<void> {
   await open_test_view_marker(120, "*test-view-marker-many*");
+};
+
+globalThis.show_test_view_marker_interleaved = async function(): Promise<void> {
+  await open_test_view_marker_interleaved("*test-view-marker-interleaved*");
 };
 
 /**
@@ -187,6 +257,7 @@ globalThis.test_view_marker_close = function(): void {
   if (activeBufferId !== null) {
     editor.closeBuffer(activeBufferId);
     padLinesByBuffer.delete(activeBufferId);
+    interleavedModeByBuffer.delete(activeBufferId);
     activeBufferId = null;
     editor.setStatus("Test view marker closed");
   }
@@ -204,6 +275,13 @@ editor.registerCommand(
   "Test View Marker (Many Virtual Lines)",
   "Test view transform with many virtual header lines",
   "show_test_view_marker_many_virtual_lines",
+  "normal"
+);
+
+editor.registerCommand(
+  "Test View Marker (Interleaved)",
+  "Test view transform with headers between each source line",
+  "show_test_view_marker_interleaved",
   "normal"
 );
 

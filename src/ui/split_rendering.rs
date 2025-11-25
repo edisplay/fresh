@@ -1089,13 +1089,17 @@ impl SplitRenderer {
             let show_line_number = should_show_line_number(current_view_line);
 
             // Only increment source line number when BOTH:
-            // 1. The PREVIOUS line was a source line (showed a line number)
+            // 1. We've already rendered at least one source line (prev_was_source_line)
             // 2. The CURRENT line is also a source line
             // This ensures virtual/injected lines don't cause line numbers to skip
             if show_line_number && prev_was_source_line {
                 current_source_line_num += 1;
             }
-            prev_was_source_line = show_line_number;
+            // Only update the flag when we see a source line - virtual lines
+            // between source lines shouldn't reset the tracking
+            if show_line_number {
+                prev_was_source_line = true;
+            }
 
             // is_continuation means "don't show line number" for rendering purposes
             let is_continuation = !show_line_number;

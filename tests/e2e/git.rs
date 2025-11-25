@@ -2025,6 +2025,21 @@ fn trigger_test_view_marker_many_virtual_lines(harness: &mut EditorTestHarness) 
     harness.render().unwrap();
 }
 
+/// Helper to trigger test view marker with interleaved headers via command palette
+fn trigger_test_view_marker_interleaved(harness: &mut EditorTestHarness) {
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+    harness
+        .type_text("Test View Marker (Interleaved)")
+        .unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+}
+
 /// MINIMAL REPRODUCTION: View transform header at byte 0 should be visible
 ///
 /// This is the simplest possible test for the bug described in docs/BLAME.md:
@@ -2226,13 +2241,43 @@ fn test_view_transform_scroll_with_single_virtual_line() {
         "Source content should be visible below header"
     );
 
-    // Verify line numbers match content:
-    // - Header line should have no line number (virtual)
-    // - "Line 1" should show line number 1
-    // - "Line 2" should show line number 2
+    // Verify exact line order by extracting content lines from screen
+    let content_lines: Vec<&str> = screen
+        .lines()
+        .filter(|l| l.contains("│") && !l.contains("~"))
+        .collect();
+
+    println!("Content lines: {content_lines:?}");
+
+    // Should have at least 4 lines: header, Line 1, Line 2, Line 3
+    assert!(content_lines.len() >= 4, "Expected at least 4 content lines");
+
+    // Line 0: Header (no line number, just separator)
     assert!(
-        screen.contains("1 │ Line 1") || screen.contains("1│Line 1"),
-        "Line 1 should have line number 1 in gutter"
+        content_lines[0].contains("│ == HEADER AT BYTE 0 =="),
+        "Line 0 should be header without line number. Got: {}",
+        content_lines[0]
+    );
+
+    // Line 1: "Line 1" with gutter showing "1"
+    assert!(
+        content_lines[1].contains("1 │ Line 1"),
+        "Line 1 should show '1 │ Line 1'. Got: {}",
+        content_lines[1]
+    );
+
+    // Line 2: "Line 2" with gutter showing "2"
+    assert!(
+        content_lines[2].contains("2 │ Line 2"),
+        "Line 2 should show '2 │ Line 2'. Got: {}",
+        content_lines[2]
+    );
+
+    // Line 3: "Line 3" with gutter showing "3"
+    assert!(
+        content_lines[3].contains("3 │ Line 3"),
+        "Line 3 should show '3 │ Line 3'. Got: {}",
+        content_lines[3]
     );
 }
 
