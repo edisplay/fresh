@@ -135,6 +135,87 @@ struct CharStyleOutput {
     is_secondary_cursor: bool,
 }
 
+/// Context for rendering the left margin (line numbers, indicators, separator)
+struct LeftMarginContext<'a> {
+    state: &'a EditorState,
+    theme: &'a crate::view::theme::Theme,
+    is_continuation: bool,
+    current_source_line_num: usize,
+    estimated_lines: usize,
+    diagnostic_lines: &'a HashSet<usize>,
+}
+
+/// Render the left margin (indicators + line numbers + separator) to line_spans
+fn render_left_margin(
+    ctx: &LeftMarginContext,
+    line_spans: &mut Vec<Span<'static>>,
+    line_view_map: &mut Vec<Option<usize>>,
+) {
+    if !ctx.state.margins.left_config.enabled {
+        return;
+    }
+
+    // For continuation lines, don't show diagnostic indicators
+    if !ctx.is_continuation && ctx.diagnostic_lines.contains(&ctx.current_source_line_num) {
+        // Show diagnostic indicator
+        push_span_with_map(
+            line_spans,
+            line_view_map,
+            "●".to_string(),
+            Style::default().fg(ratatui::style::Color::Red),
+            None,
+        );
+    } else {
+        // Show space (reserved for future indicators like breakpoints)
+        push_span_with_map(
+            line_spans,
+            line_view_map,
+            " ".to_string(),
+            Style::default(),
+            None,
+        );
+    }
+
+    // Render line number (right-aligned) or blank for continuations
+    if ctx.is_continuation {
+        // For wrapped continuation lines, render blank space
+        let blank = " ".repeat(ctx.state.margins.left_config.width);
+        push_span_with_map(
+            line_spans,
+            line_view_map,
+            blank,
+            Style::default().fg(ctx.theme.line_number_fg),
+            None,
+        );
+    } else {
+        let margin_content = ctx.state.margins.render_line(
+            ctx.current_source_line_num,
+            crate::view::margin::MarginPosition::Left,
+            ctx.estimated_lines,
+        );
+        let (rendered_text, style_opt) =
+            margin_content.render(ctx.state.margins.left_config.width);
+
+        // Use custom style if provided, otherwise use default theme color
+        let margin_style =
+            style_opt.unwrap_or_else(|| Style::default().fg(ctx.theme.line_number_fg));
+
+        push_span_with_map(line_spans, line_view_map, rendered_text, margin_style, None);
+    }
+
+    // Render separator
+    if ctx.state.margins.left_config.show_separator {
+        let separator_style = Style::default().fg(ctx.theme.line_number_fg);
+        push_span_with_map(
+            line_spans,
+            line_view_map,
+            ctx.state.margins.left_config.separator.clone(),
+            separator_style,
+            None,
+        );
+    }
+}
+
 /// Compute the style for a character by layering: token -> ANSI -> syntax -> semantic -> overlays -> selection -> cursor
 fn compute_char_style(ctx: &CharStyleContext) -> CharStyleOutput {
     use crate::view::overlay::OverlayFace;
@@ -1621,73 +1702,18 @@ impl SplitRenderer {
             let mut _last_seg_width: usize = 0;
 
             // Render left margin (indicators + line numbers + separator)
-            if state.margins.left_config.enabled {
-                // For continuation lines, don't show diagnostic indicators
-                if !is_continuation && diagnostic_lines.contains(&current_source_line_num) {
-                    // Show diagnostic indicator
-                    push_span_with_map(
-                        &mut line_spans,
-                        &mut line_view_map,
-                        "●".to_string(),
-                        Style::default().fg(ratatui::style::Color::Red),
-                        None,
-                    );
-                } else {
-                    // Show space (reserved for future indicators like breakpoints)
-                    push_span_with_map(
-                        &mut line_spans,
-                        &mut line_view_map,
-                        " ".to_string(),
-                        Style::default(),
-                        None,
-                    );
-                }
-
-                // Next N columns: render line number (right-aligned) or blank for continuations
-                if is_continuation {
-                    // For wrapped continuation lines, render blank space
-                    let blank = " ".repeat(state.margins.left_config.width);
-                    push_span_with_map(
-                        &mut line_spans,
-                        &mut line_view_map,
-                        blank,
-                        Style::default().fg(theme.line_number_fg),
-                        None,
-                    );
-                } else {
-                    let margin_content = state.margins.render_line(
-                        current_source_line_num,
-                        crate::view::margin::MarginPosition::Left,
-                        estimated_lines,
-                    );
-                    let (rendered_text, style_opt) =
-                        margin_content.render(state.margins.left_config.width);
-
-                    // Use custom style if provided, otherwise use default theme color
-                    let margin_style =
-                        style_opt.unwrap_or_else(|| Style::default().fg(theme.line_number_fg));
-
-                    push_span_with_map(
-                        &mut line_spans,
-                        &mut line_view_map,
-                        rendered_text,
-                        margin_style,
-                        None,
-                    );
-                }
-
-                // Render separator
-                if state.margins.left_config.show_separator {
-                    let separator_style = Style::default().fg(theme.line_number_fg);
-                    push_span_with_map(
-                        &mut line_spans,
-                        &mut line_view_map,
-                        state.margins.left_config.separator.clone(),
-                        separator_style,
-                        None,
-                    );
-                }
-            }
+            render_left_margin(
+                &LeftMarginContext {
+                    state,
+                    theme,
+                    is_continuation,
+                    current_source_line_num,
+                    estimated_lines,
+                    diagnostic_lines,
+                },
+                &mut line_spans,
+                &mut line_view_map,
+            );
 
             // Check if this line has any selected text
             let mut char_index = 0;
