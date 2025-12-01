@@ -63,7 +63,7 @@ use crate::services::async_bridge::{AsyncBridge, AsyncMessage};
 use crate::services::fs::{FsBackend, FsManager, LocalFsBackend};
 use crate::services::lsp::client::LspServerConfig;
 use crate::services::lsp::manager::{detect_language, LspManager, LspSpawnResult};
-use crate::services::plugins::api::PluginCommand;
+use crate::services::plugins::api::{BufferSavedDiff, PluginCommand};
 use crate::services::plugins::thread::PluginThreadHandle;
 use crate::state::EditorState;
 use crate::view::file_tree::{FileTree, FileTreeView};
@@ -3810,6 +3810,7 @@ impl Editor {
 
             // Clear and update buffer info
             snapshot.buffers.clear();
+            snapshot.buffer_saved_diffs.clear();
             snapshot.buffer_cursor_positions.clear();
             snapshot.buffer_text_properties.clear();
 
@@ -3821,6 +3822,16 @@ impl Editor {
                     length: state.buffer.len(),
                 };
                 snapshot.buffers.insert(*buffer_id, buffer_info);
+
+                let diff = state.buffer.diff_since_saved();
+                snapshot.buffer_saved_diffs.insert(
+                    *buffer_id,
+                    BufferSavedDiff {
+                        equal: diff.equal,
+                        byte_range: diff.byte_range.clone(),
+                        line_range: diff.line_range.clone(),
+                    },
+                );
 
                 // Store cursor position for this buffer
                 let cursor_pos = state.cursors.primary().position;

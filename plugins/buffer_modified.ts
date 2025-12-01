@@ -94,6 +94,27 @@ function markLinesModified(bufferId: number, startLine: number, endLine: number)
   }
 }
 
+function reapplyIndicatorsFromDiff(bufferId: number): void {
+  const diff = editor.getBufferSavedDiff(bufferId);
+  if (!diff) return;
+
+  // If buffer matches saved snapshot, clear everything.
+  if (diff.equal) {
+    editor.clearLineIndicators(bufferId, NAMESPACE);
+    return;
+  }
+
+  // If line info is unavailable, leave existing indicators (best effort).
+  if (!diff.line_range) return;
+
+  const [start, end] = diff.line_range;
+  // Reset namespace to drop stale indicators outside the changed range.
+  editor.clearLineIndicators(bufferId, NAMESPACE);
+  for (let line = start; line < end; line++) {
+    editor.setLineIndicator(bufferId, line, NAMESPACE, SYMBOL, COLOR[0], COLOR[1], COLOR[2], PRIORITY);
+  }
+}
+
 // =============================================================================
 // Event Handlers
 // =============================================================================
@@ -179,6 +200,7 @@ globalThis.onBufferModifiedAfterInsert = function (args: {
   // Mark all affected lines (from start_line to end_line inclusive)
   // The indicator markers will automatically track their positions
   markLinesModified(bufferId, args.start_line, args.end_line);
+  reapplyIndicatorsFromDiff(bufferId);
 
   return true;
 };
@@ -209,6 +231,7 @@ globalThis.onBufferModifiedAfterDelete = function (args: {
   // Mark the line where deletion occurred
   // Markers for deleted lines are automatically cleaned up
   markLinesModified(bufferId, args.start_line, args.start_line);
+  reapplyIndicatorsFromDiff(bufferId);
 
   return true;
 };

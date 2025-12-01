@@ -9,6 +9,7 @@ use regex::bytes::Regex;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 // Large file support configuration
 /// Default threshold for considering a file "large" (100 MB)
@@ -105,6 +106,9 @@ pub struct TextBuffer {
     /// The piece tree for efficient text manipulation with integrated line tracking
     piece_tree: PieceTree,
 
+    /// Snapshot of the piece tree root at last save (shared via Arc)
+    saved_root: Arc<crate::model::piece_tree::PieceTreeNode>,
+
     /// List of string buffers containing chunks of text data
     /// Index 0 is typically the original/stored buffer
     /// Additional buffers are added for modifications
@@ -134,8 +138,10 @@ impl TextBuffer {
     /// Create a new text buffer (with large_file_threshold for backwards compatibility)
     /// Note: large_file_threshold is ignored in the new implementation
     pub fn new(_large_file_threshold: usize) -> Self {
+        let piece_tree = PieceTree::empty();
         TextBuffer {
-            piece_tree: PieceTree::empty(),
+            saved_root: piece_tree.root(),
+            piece_tree,
             buffers: vec![StringBuffer::new(0, Vec::new())],
             next_buffer_id: 1,
             file_path: None,
@@ -154,12 +160,17 @@ impl TextBuffer {
         let buffer = StringBuffer::new(0, content);
         let line_feed_cnt = buffer.line_feed_count();
 
+        let piece_tree = if bytes > 0 {
+            PieceTree::new(BufferLocation::Stored(0), 0, bytes, line_feed_cnt)
+        } else {
+            PieceTree::empty()
+        };
+
+        let saved_root = piece_tree.root();
+
         TextBuffer {
-            piece_tree: if bytes > 0 {
-                PieceTree::new(BufferLocation::Stored(0), 0, bytes, line_feed_cnt)
-            } else {
-                PieceTree::empty()
-            },
+            piece_tree,
+            saved_root,
             buffers: vec![buffer],
             next_buffer_id: 1,
             file_path: None,
@@ -177,8 +188,11 @@ impl TextBuffer {
 
     /// Create an empty text buffer
     pub fn empty() -> Self {
+        let piece_tree = PieceTree::empty();
+        let saved_root = piece_tree.root();
         TextBuffer {
-            piece_tree: PieceTree::empty(),
+            piece_tree,
+            saved_root,
             buffers: vec![StringBuffer::new(0, Vec::new())],
             next_buffer_id: 1,
             file_path: None,
@@ -275,9 +289,11 @@ impl TextBuffer {
         } else {
             PieceTree::empty()
         };
+        let saved_root = piece_tree.root();
 
         Ok(TextBuffer {
             piece_tree,
+            saved_root,
             buffers: vec![buffer],
             next_buffer_id: 1,
             file_path: Some(path.to_path_buf()),
@@ -313,7 +329,7 @@ impl TextBuffer {
             // Empty file - just create it
             std::fs::File::create(dest_path)?;
             self.file_path = Some(dest_path.to_path_buf());
-            self.modified = false;
+            self.mark_saved_snapshot();
             return Ok(());
         }
 
@@ -387,7 +403,7 @@ impl TextBuffer {
         std::fs::rename(&temp_path, dest_path)?;
 
         self.file_path = Some(dest_path.to_path_buf());
-        self.modified = false;
+        self.mark_saved_snapshot();
         Ok(())
     }
 
@@ -401,6 +417,17 @@ impl TextBuffer {
     /// Returns None if line count is unknown (e.g., for large files without line indexing)
     pub fn line_count(&self) -> Option<usize> {
         self.piece_tree.line_count()
+    }
+
+    /// Snapshot the current tree as the saved baseline
+    pub fn mark_saved_snapshot(&mut self) {
+        self.saved_root = self.piece_tree.root();
+        self.modified = false;
+    }
+
+    /// Diff the current piece tree against the last saved snapshot.
+    pub fn diff_since_saved(&self) -> crate::model::piece_tree_diff::PieceTreeDiff {
+        crate::model::piece_tree_diff::diff_piece_trees(&self.saved_root, &self.piece_tree.root())
     }
 
     /// Convert a byte offset to a line/column position

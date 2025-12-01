@@ -123,6 +123,13 @@ interface BufferInfo {
   length: number;
 }
 
+/** Diff vs last save for a buffer */
+interface TsBufferSavedDiff {
+  equal: boolean;
+  byte_range: [number, number];
+  line_range?: [number, number] | null;
+}
+
 /** Selection range */
 interface SelectionRange {
   /** Start byte position */
@@ -341,6 +348,8 @@ interface EditorAPI {
    * @returns true if process is running, false if not found or exited
    */
   isProcessRunning(#[bigint] process_id: number): boolean;
+  /** Get diff vs last saved snapshot for a buffer */
+  getBufferSavedDiff(buffer_id: number): TsBufferSavedDiff | null;
 
   // === Buffer Info Queries ===
   /**

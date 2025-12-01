@@ -104,6 +104,18 @@ interface BufferInfo {
 | `modified` | Whether buffer has unsaved changes |
 | `length` | Buffer length in bytes |
 
+### TsBufferSavedDiff
+
+Diff vs last save for a buffer
+
+```typescript
+interface TsBufferSavedDiff {
+  equal: boolean;
+  byte_range: [number, number];
+  line_range?: [number, number] | null;
+}
+```
+
 ### SelectionRange
 
 Selection range
@@ -459,6 +471,20 @@ isProcessRunning(#[bigint] process_id: number): boolean
 | Name | Type | Description |
 |------|------|-------------|
 | `#[bigint] process_id` | `number` | - |
+
+#### `getBufferSavedDiff`
+
+Get diff vs last saved snapshot for a buffer
+
+```typescript
+getBufferSavedDiff(buffer_id: number): TsBufferSavedDiff | null
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `buffer_id` | `number` | - |
 
 ### Buffer Info Queries
 

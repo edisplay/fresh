@@ -786,6 +786,11 @@ impl PieceTree {
         self.cursor_at_offset(offset + bytes)
     }
 
+    /// Get a clone of the root node (shared via Arc)
+    pub fn root(&self) -> Arc<PieceTreeNode> {
+        Arc::clone(&self.root)
+    }
+
     /// Insert text at the given position (line, column)
     /// Returns new cursor after the inserted text
     /// This performs a SINGLE tree traversal (more efficient than position_to_offset + insert)

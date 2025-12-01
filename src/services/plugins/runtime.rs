@@ -1417,6 +1417,14 @@ struct TsBufferInfo {
     length: u32,
 }
 
+/// Diff vs last save for a buffer
+#[derive(serde::Serialize)]
+struct TsBufferSavedDiff {
+    equal: bool,
+    byte_range: (u32, u32),
+    line_range: Option<(u32, u32)>,
+}
+
 /// Selection range
 #[derive(serde::Serialize)]
 struct TsSelectionRange {
@@ -1472,6 +1480,35 @@ fn op_fresh_get_buffer_info(state: &mut OpState, buffer_id: u32) -> Option<TsBuf
         };
     }
     None
+}
+
+/// Get diff vs last saved snapshot for a buffer
+#[op2]
+#[serde]
+fn op_fresh_get_buffer_saved_diff(state: &mut OpState, buffer_id: u32) -> Option<TsBufferSavedDiff> {
+    let runtime_state = state
+        .try_borrow::<Rc<RefCell<TsRuntimeState>>>()?
+        .borrow()
+        .state_snapshot
+        .read()
+        .ok()?
+        .buffer_saved_diffs
+        .get(&BufferId(buffer_id as usize))
+        .cloned()?;
+
+    let line_range = runtime_state
+        .line_range
+        .as_ref()
+        .map(|r| (r.start as u32, r.end as u32));
+
+    Some(TsBufferSavedDiff {
+        equal: runtime_state.equal,
+        byte_range: (
+            runtime_state.byte_range.start as u32,
+            runtime_state.byte_range.end as u32,
+        ),
+        line_range,
+    })
 }
 
 /// List all open buffers
@@ -2570,6 +2607,7 @@ extension!(
         op_fresh_get_cursor_position,
         op_fresh_get_buffer_path,
         op_fresh_get_buffer_length,
+        op_fresh_get_buffer_saved_diff,
         op_fresh_is_buffer_modified,
         op_fresh_insert_text,
         op_fresh_delete_range,
@@ -2740,6 +2778,9 @@ impl TypeScriptRuntime {
                     },
                     getBufferLength(bufferId) {
                         return core.ops.op_fresh_get_buffer_length(bufferId);
+                    },
+                    getBufferSavedDiff(bufferId) {
+                        return core.ops.op_fresh_get_buffer_saved_diff(bufferId);
                     },
                     isBufferModified(bufferId) {
                         return core.ops.op_fresh_is_buffer_modified(bufferId);

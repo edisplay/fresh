@@ -53,6 +53,14 @@ pub struct BufferInfo {
     pub length: usize,
 }
 
+/// Diff between current buffer content and last saved snapshot
+#[derive(Debug, Clone)]
+pub struct BufferSavedDiff {
+    pub equal: bool,
+    pub byte_range: Range<usize>,
+    pub line_range: Option<Range<usize>>,
+}
+
 /// Information about the viewport
 #[derive(Debug, Clone)]
 pub struct ViewportInfo {
@@ -144,6 +152,8 @@ pub struct EditorStateSnapshot {
     pub active_split_id: usize,
     /// Information about all open buffers
     pub buffers: HashMap<BufferId, BufferInfo>,
+    /// Diff vs last saved snapshot for each buffer (line counts may be unknown)
+    pub buffer_saved_diffs: HashMap<BufferId, BufferSavedDiff>,
     /// Primary cursor position for the active buffer
     pub primary_cursor: Option<CursorInfo>,
     /// All cursor positions for the active buffer
@@ -170,6 +180,7 @@ impl EditorStateSnapshot {
             active_buffer_id: BufferId(0),
             active_split_id: 0,
             buffers: HashMap::new(),
+            buffer_saved_diffs: HashMap::new(),
             primary_cursor: None,
             all_cursors: Vec::new(),
             viewport: None,
