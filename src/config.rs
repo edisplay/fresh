@@ -382,6 +382,30 @@ impl Default for MenuConfig {
 }
 
 impl Config {
+    /// Get the default config file path
+    pub fn default_config_path() -> Option<std::path::PathBuf> {
+        dirs::config_dir().map(|d| d.join("fresh").join("config.json"))
+    }
+
+    /// Load configuration from the default location, falling back to defaults if not found
+    pub fn load_or_default() -> Self {
+        if let Some(config_path) = Self::default_config_path() {
+            if config_path.exists() {
+                match Self::load_from_file(&config_path) {
+                    Ok(config) => return config,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load config from {}: {}, using defaults",
+                            config_path.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+        Self::default()
+    }
+
     /// Load configuration from a JSON file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let contents = std::fs::read_to_string(path.as_ref())

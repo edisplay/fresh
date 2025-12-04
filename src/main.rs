@@ -127,7 +127,8 @@ fn main() -> io::Result<()> {
             }
         }
     } else {
-        config::Config::default()
+        // Try to load from default location, fall back to defaults
+        config::Config::load_or_default()
     };
 
     // Set up terminal first
