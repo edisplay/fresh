@@ -211,6 +211,7 @@ fn main() -> io::Result<()> {
     // Set up panic hook to restore terminal
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
+        let _ = crossterm::execute!(stdout(), crossterm::event::DisableMouseCapture);
         let _ = stdout().execute(SetCursorStyle::DefaultUserShape);
         let _ = stdout().execute(PopKeyboardEnhancementFlags);
         let _ = disable_raw_mode();
