@@ -1590,7 +1590,8 @@ impl DirectoryContext {
             })?
             .join("fresh");
 
-        let config_dir = dirs::config_dir()
+        #[allow(unused_mut)] // mut needed on macOS only
+        let mut config_dir = dirs::config_dir()
             .ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::NotFound,
