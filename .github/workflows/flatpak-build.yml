@@ -41,13 +41,11 @@ jobs:
           sed -i "s/date=\"[^\"]*\"/date=\"$DATE\"/" flatpak/io.github.sinelaw.fresh.metainfo.xml
 
       - name: Build Flatpak
-        run: |
-          flatpak-builder --force-clean --repo=repo build flatpak/io.github.sinelaw.fresh.yml
-
-      - name: Create Flatpak bundle
-        run: |
-          VERSION="${{ inputs.version }}"
-          flatpak build-bundle repo fresh-editor-${VERSION}-x86_64.flatpak io.github.sinelaw.fresh
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/io.github.sinelaw.fresh.yml
+          bundle: fresh-editor-${{ inputs.version }}-x86_64.flatpak
+          upload-artifact: false
 
       - name: Generate checksum
         run: |
