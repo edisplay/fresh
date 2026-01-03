@@ -182,6 +182,8 @@
               rustToolchain
               cargo-watch
               cargo-edit
+              rust-analyzer
+              vscode-json-languageserver
 
               tree-sitter
 
