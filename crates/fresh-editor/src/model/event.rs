@@ -674,6 +674,13 @@ impl EventLog {
         // If we're not at the end, truncate future events
         if self.current_index < self.entries.len() {
             self.entries.truncate(self.current_index);
+
+            // Invalidate saved_at_index if it pointed to a truncated entry
+            if let Some(saved_idx) = self.saved_at_index {
+                if saved_idx > self.current_index {
+                    self.saved_at_index = None;
+                }
+            }
         }
 
         // Stream event to file if enabled
@@ -1075,5 +1082,62 @@ mod tests {
 
         assert_eq!(log.entries().len(), 2);
         assert_eq!(log.current_index(), 2);
+    }
+
+    /// Test for v0.1.77 panic: "range end index 148 out of range for slice of length 125"
+    ///
+    /// The bug occurs when:
+    /// 1. Make many changes (entries grows)
+    /// 2. mark_saved() sets saved_at_index to current position
+    /// 3. Undo several times
+    /// 4. Make new changes - this truncates entries but saved_at_index stays
+    /// 5. is_at_saved_position() panics on out-of-bounds slice access
+    #[test]
+    fn test_is_at_saved_position_after_truncate() {
+        let mut log = EventLog::new();
+
+        // Step 1: Make many changes
+        for i in 0..150 {
+            log.append(Event::Insert {
+                position: i,
+                text: "x".to_string(),
+                cursor_id: CursorId(0),
+            });
+        }
+
+        assert_eq!(log.entries().len(), 150);
+        assert_eq!(log.current_index(), 150);
+
+        // Step 2: Save - this sets saved_at_index = 150
+        log.mark_saved();
+
+        // Step 3: Undo 30 times - current_index goes to 120, but entries stay at 150
+        for _ in 0..30 {
+            log.undo();
+        }
+        assert_eq!(log.current_index(), 120);
+        assert_eq!(log.entries().len(), 150);
+
+        // Step 4: Make new changes - this truncates entries to 120, then adds new
+        log.append(Event::Insert {
+            position: 0,
+            text: "NEW".to_string(),
+            cursor_id: CursorId(0),
+        });
+
+        // Now entries.len() = 121, but saved_at_index = 150
+        assert_eq!(log.entries().len(), 121);
+        assert_eq!(log.current_index(), 121);
+
+        // Step 5: Call is_at_saved_position() - THIS PANICS in v0.1.77
+        // The code does: self.entries[start..end] where end = saved_at_index = 150
+        // but entries.len() = 121, so 150 is out of bounds
+        let result = log.is_at_saved_position();
+
+        // After fix: should return false (we're not at saved position, we branched off)
+        assert!(
+            !result,
+            "Should not be at saved position after undo + new edit"
+        );
     }
 }

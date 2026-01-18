@@ -523,6 +523,79 @@ fn test_issue_580_tab_size_zero_causes_panic() {
     );
 }
 
+/// Test panic when saved_at_index exceeds entries length after undo + new edits
+///
+/// Bug from v0.1.77:
+/// thread 'main' panicked at src/model/event.rs:617:29:
+/// range end index 148 out of range for slice of length 125
+///
+/// The crash occurs in is_at_saved_position() when:
+/// 1. Make many changes (event log grows to ~150 entries)
+/// 2. Save (sets saved_at_index = 148)
+/// 3. Undo multiple times (current_index decreases but entries stay)
+/// 4. Make NEW changes (truncates entries to current_index, e.g., 125)
+/// 5. Undo triggers update_modified_from_event_log() which calls is_at_saved_position()
+///    The code tries to access self.entries[start..end] where end = saved_at_index (148)
+///    but entries.len() is now 125
+///
+/// The fix should clamp or validate indices before slicing.
+#[test]
+fn test_saved_at_index_out_of_bounds_after_undo_and_edit() {
+    use crate::common::fixtures::TestFixture;
+
+    // Create a test file
+    let fixture = TestFixture::new("test_save_index_oob.txt", "start").unwrap();
+    let mut harness = EditorTestHarness::new(80, 24).unwrap();
+
+    // Open the file
+    harness.open_file(&fixture.path).unwrap();
+    harness.render().unwrap();
+
+    // Step 1: Make many changes to build up event log entries
+    // Each character typed adds to the event log
+    harness.send_key(KeyCode::End, KeyModifiers::NONE).unwrap();
+    for i in 0..150 {
+        harness.type_text(&format!("{}", i % 10)).unwrap();
+    }
+    harness.render().unwrap();
+
+    // Step 2: Save the file (this sets saved_at_index to a high value ~150+)
+    harness
+        .send_key(KeyCode::Char('s'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Verify we're not modified after save
+    assert!(
+        !harness.editor().active_state().buffer.is_modified(),
+        "Should not be modified immediately after save"
+    );
+
+    // Step 3: Undo many times (reduces current_index but entries remain)
+    for _ in 0..30 {
+        harness
+            .send_key(KeyCode::Char('z'), KeyModifiers::CONTROL)
+            .unwrap();
+    }
+    harness.render().unwrap();
+
+    // Step 4: Make NEW changes - this truncates entries to current_index
+    // and then appends new entries, resulting in entries.len() < saved_at_index
+    harness.type_text("NEW").unwrap();
+    harness.render().unwrap();
+
+    // Step 5: Trigger another undo - this calls update_modified_from_event_log()
+    // which in turn calls is_at_saved_position()
+    // Before the fix: This panics with "range end index 148 out of range for slice of length 125"
+    // After the fix: Should complete without panicking
+    harness
+        .send_key(KeyCode::Char('z'), KeyModifiers::CONTROL)
+        .unwrap();
+
+    // If we get here without panicking, the bug is fixed
+    harness.render().unwrap();
+}
+
 /// Test issue #580: Global editor.tab_size = 0 should not cause panic
 ///
 /// Similar to the language-specific case, but tests the global editor.tab_size setting.
