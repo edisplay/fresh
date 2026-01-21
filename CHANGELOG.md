@@ -1,5 +1,24 @@
 # Release Notes
 
+## 0.1.87
+
+### Features
+
+* **Language Support**: Added LSP configurations and syntax highlighting for Zig, Java, LaTeX, Markdown, and Templ.
+* **Git File Highlighting**: Syntax highlighting for git-related files (.gitignore, .gitattributes, .gitmodules).
+* **Plugin Type Safety**: TypeScript type definitions for plugin API with compile-time validation.
+
+### Bug Fixes
+
+* **Hover Popup**: Fixed scrolling to bottom, dismiss on click outside, block clicks inside popup.
+* **Settings UI**: Fixed overwriting manual config.json edits when saving from Settings UI (#806).
+* **Windows Terminal**: Fixed truecolor detection and 256-color grayscale conversion overflow.
+* **Composite Buffers**: Fixed mouse click sync, deserialization errors, and cursor positioning.
+* **Plugin Stability**: Plugin thread panics now propagate to main thread for proper error handling.
+* **Review Diff Plugin**: Fixed side-by-side diff commands not appearing in command palette.
+
+---
+
 ## 0.1.86
 
 ### Features
