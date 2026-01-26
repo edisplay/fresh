@@ -4,29 +4,32 @@
 
 ### Features
 
-* **Quick Open**: Unified prompt (Ctrl+P) for navigating files, commands, buffers, and lines. Use prefix characters to switch modes:
+* **Package Manager**: Browse, install, and uninstall plugins, themes, and language packs. Features search, package validation, background registry sync with local caching, and automatic theme reloading after install.
+  - **Language packs** bundle syntax highlighting (`.sublime-syntax`), language settings, and LSP server configuration
+  - Filter by package type: Plugins, Themes, Languages
+
+* **Command Palette** (Ctrl+P): Unified prompt for navigating files, commands, buffers, and lines. Use prefix characters to switch modes:
   - No prefix: fuzzy file finder
-  - `>` prefix: command palette
+  - `>` prefix: commands
   - `#` prefix: switch open buffers by name
   - `:` prefix: go to line number
 
-  Includes hints line showing available prefixes, toggle behavior, and Tab completion.
-
-* **Plugin Package Manager**: New UI for browsing, installing, and uninstalling plugins and themes. Features search, package validation, and automatic theme reloading after install.
+  Includes hints line showing available prefixes and Tab completion.
 
 * **Status Message Log**: Click status bar messages to view full message history.
 
-* **Theme Validation**: Strict JSON validation for theme files with a CLI command.
+* **Package Scaffolding (`--init`)**: Create new plugin, theme, or language pack projects with `fresh --init`. Interactive wizard generates package.json, entry files, and proper directory structure.
+
+* **Theme Validation (`--validate-theme`)**: Strict JSON validation for theme files. Run `fresh --validate-theme <path>` to check for unknown fields and type errors.
 
 ### Bug Fixes
 
-* **Bracket Expansion**: Pressing Enter between matching brackets now expands them with proper indentation (#629).
-* **Ctrl+D Word Selection**: Ctrl+D now selects the entire word when no selection exists.
-* **Ctrl+Right Word Jump**: Fixed Ctrl+Right to jump to word end, matching Ctrl+Shift+Right behavior.
-* **Alt+N/P Search**: Search is now invalidated when cursor moves manually, preventing stale matches.
-* **Package Uninstall**: Fixed plugin cleanup and command unregistration when uninstalling packages.
-* **Theme Fallback**: Editor now falls back to default theme when configured theme is not found.
-* **Cross-Platform Theme Paths**: Fixed theme path handling for Windows compatibility.
+* **Bracket Expansion**: Pressing Enter between matching brackets expands them with proper indentation (#629).
+* **Ctrl+D Word Selection**: Ctrl+D selects the entire word when no selection exists.
+* **Ctrl+Right Word Jump**: Ctrl+Right jumps to word end, matching Ctrl+Shift+Right behavior.
+* **Alt+N/P Search**: Search invalidates when cursor moves manually, preventing stale matches.
+* **Theme Fallback**: Falls back to default theme when configured theme is not found.
+* **Cross-Platform Theme Paths**: Theme path handling works correctly on Windows.
 
 ### Internal
 

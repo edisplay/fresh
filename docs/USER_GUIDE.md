@@ -31,12 +31,24 @@ fresh Cargo.toml src/lib.rs:100:5
 
 The `file:line:col` syntax is useful for jumping directly to compiler errors or search results.
 
+#### CLI Tools
+
+Fresh includes command-line tools for package development:
+
+```bash
+# Create a new plugin, theme, or language pack project
+fresh --init
+
+# Validate a theme file for errors
+fresh --validate-theme path/to/theme.json
+```
+
 ### Core Concepts
 
-*   **The Command Palette:** The command palette is your central hub for accessing all of Fresh's features. Press `Ctrl+P` to open it, and then start typing to search for commands.
+*   **The Command Palette:** Press `Ctrl+P` to open the command palette - your central hub for navigating files, running commands, switching buffers, and jumping to lines. Use prefix characters to switch modes (see [Command Palette](#command-palette) below).
 *   **Buffers:** Each open file is represented as a buffer. You can have multiple buffers open at once and switch between them.
 *   **Splits:** You can split your editor view horizontally or vertically to view multiple buffers at once.
-*   **The Status Bar:** The status bar at the bottom of the screen displays information about the current buffer, including the file name, cursor position, and Git branch.
+*   **The Status Bar:** The status bar at the bottom of the screen displays information about the current buffer, including the file name, cursor position, and Git branch. Click on status messages to view the full message history.
 
 ## Core Features
 
@@ -48,9 +60,25 @@ Fresh provides a powerful set of editing features to help you be more productive
 *   **Advanced Selection:** Fresh provides a variety of ways to select text, including word selection (`Ctrl+W`), line selection (`Ctrl+L`), and expanding the selection incrementally.
 *   **Unlimited Undo/Redo:** Fresh has a complete edit history, so you can undo and redo changes as much as you need to.
 
+### Command Palette
+
+Press `Ctrl+P` to open the command palette. Use prefix characters to switch modes:
+
+| Prefix | Mode | Description |
+|--------|------|-------------|
+| *(none)* | File finder | Fuzzy search for files in your project |
+| `>` | Commands | Search and run editor commands |
+| `#` | Buffers | Switch between open buffers by name |
+| `:` | Go to line | Jump to a specific line number |
+
+**Tips:**
+- A hints line at the bottom shows available prefixes
+- Press `Tab` to accept the top suggestion
+- Type `>` to access commands, or `#` followed by a buffer name to switch files
+
 ### Navigation
 
-*   **Go to Definition:** Use the command palette (`Ctrl+P`) and search for "Go to Definition" to jump to the definition of a symbol under the cursor (requires LSP).
+*   **Go to Definition:** Use the command palette (`Ctrl+P >`) and search for "Go to Definition" to jump to the definition of a symbol under the cursor (requires LSP).
 *   **Position History:** Navigate back and forward through your edit locations using `Alt+Left` and `Alt+Right`.
 
 ### File Explorer
@@ -264,29 +292,38 @@ Fresh's functionality can be extended with plugins written in TypeScript. Fresh 
 
 ### Package Manager
 
-Fresh includes a built-in package manager for installing plugins and themes from git repositories.
+Fresh includes a built-in package manager for installing plugins, themes, and language packs from git repositories.
 
-#### Installing Packages
+#### Opening the Package Manager
 
-Use the command palette (`Ctrl+P`) and search for:
+Use the command palette (`Ctrl+P >`) and search for "Package Manager" to open the package browser. You can filter by package type (Plugins, Themes, Languages) and search for packages by name.
+
+#### Package Types
+
+| Type | Description |
+|------|-------------|
+| **Plugins** | Extend Fresh with custom commands and functionality |
+| **Themes** | Custom color schemes and styling |
+| **Language packs** | Syntax highlighting, language settings, and LSP configuration for new languages |
+
+#### Commands
+
+Use the command palette (`Ctrl+P >`) and search for:
 
 | Command | Description |
 |---------|-------------|
-| `pkg: Install Plugin` | Browse and install plugins from the registry |
-| `pkg: Install Theme` | Browse and install themes from the registry |
+| `pkg: Open Package Manager` | Browse and install packages from the registry |
 | `pkg: Install from URL` | Install directly from any git repository URL |
-| `pkg: List Installed` | Show all installed packages |
 | `pkg: Update All` | Update all installed packages |
-| `pkg: Remove Package` | Remove an installed package |
 
 #### Installing from Git URL
 
 Any git repository can be installed directly:
 
-1. Open command palette (`Ctrl+P`)
+1. Open the command palette (`Ctrl+P >`)
 2. Search for `pkg: Install from URL`
 3. Enter the git repository URL (e.g., `https://github.com/user/fresh-plugin`)
-4. Restart Fresh to activate the plugin
+4. Plugins and themes activate immediately; language packs apply to newly opened files
 
 **Monorepo support:** For repositories containing multiple plugins, use a URL fragment to specify the subdirectory:
 
