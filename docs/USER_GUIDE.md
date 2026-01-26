@@ -292,7 +292,7 @@ Fresh's functionality can be extended with plugins written in TypeScript. Fresh 
 
 ### Package Manager
 
-Fresh includes a built-in package manager for installing plugins, themes, and language packs from git repositories.
+Fresh includes a built-in package manager for installing plugins, themes, and language packs from the [official registry](https://github.com/sinelaw/fresh-plugins-registry) or any git repository. See [fresh-plugins](https://github.com/sinelaw/fresh-plugins) for example packages you can use as templates.
 
 #### Opening the Package Manager
 
@@ -343,7 +343,7 @@ Each package is a git repository, so you can update manually with `git pull` if 
 
 #### Registry Sources
 
-By default, Fresh uses the official package registry. You can add additional registries in your config:
+By default, Fresh uses the [official package registry](https://github.com/sinelaw/fresh-plugins-registry). You can add additional registries in your config:
 
 ```json
 {

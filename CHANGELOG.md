@@ -4,9 +4,10 @@
 
 ### Features
 
-* **Package Manager**: Browse, install, and uninstall plugins, themes, and language packs. Features search, package validation, background registry sync with local caching, and automatic theme reloading after install.
+* **Package Manager**: Browse, install, and uninstall plugins, themes, and language packs from the [official registry](https://github.com/sinelaw/fresh-plugins-registry). Features search, package validation, background registry sync with local caching, and automatic theme reloading after install.
   - **Language packs** bundle syntax highlighting (`.sublime-syntax`), language settings, and LSP server configuration
   - Filter by package type: Plugins, Themes, Languages
+  - See [fresh-plugins](https://github.com/sinelaw/fresh-plugins) for example packages
 
 * **Command Palette** (Ctrl+P): Unified prompt for navigating files, commands, buffers, and lines. Use prefix characters to switch modes:
   - No prefix: fuzzy file finder
