@@ -31,11 +31,14 @@ export default defineConfig({
         text: "Features",
         items: [
           { text: "Overview", link: "/features/" },
+          { text: "Editing", link: "/features/editing" },
+          { text: "Command Palette", link: "/features/command-palette" },
+          { text: "Navigation", link: "/features/navigation" },
+          { text: "File Explorer", link: "/features/file-explorer" },
+          { text: "Search and Replace", link: "/features/search-replace" },
           { text: "Integrated Terminal", link: "/features/terminal" },
           { text: "LSP Integration", link: "/features/lsp" },
-          {
-            text: "Themes", link: "/features/themes",
-          },    
+          { text: "Themes", link: "/features/themes" },
         ],
       },
       {
