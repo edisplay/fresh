@@ -52,6 +52,8 @@
               (craneLib.fileset.commonCargoSources unfilteredRoot)
               # Also keep any javascript files
               (lib.fileset.fileFilter (file: file.hasExt "js") unfilteredRoot)
+              # Keep Python files (used by include_str! in remote/mod.rs)
+              (lib.fileset.fileFilter (file: file.hasExt "py") unfilteredRoot)
               # Keep sublime-syntax grammar files (used by include_str! in grammar_registry.rs)
               (lib.fileset.fileFilter (file: file.hasExt "sublime-syntax") unfilteredRoot)
               # Runtime assets in crates/fresh-editor
