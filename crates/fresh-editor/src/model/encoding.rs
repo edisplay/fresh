@@ -43,6 +43,8 @@ pub enum Encoding {
     Latin1,
     /// Windows-1252 / CP-1252 (Windows Western European, often called "ANSI")
     Windows1252,
+    /// Windows-1250 / CP-1250 (Windows Central European)
+    Windows1250,
     /// GB18030 (Chinese, superset of GBK)
     Gb18030,
     /// GBK (Chinese Simplified, subset of GB18030)
@@ -64,6 +66,7 @@ impl Encoding {
             Self::Ascii => "ASCII",
             Self::Latin1 => "Latin-1",
             Self::Windows1252 => "Windows-1252",
+            Self::Windows1250 => "Windows-1250",
             Self::Gb18030 => "GB18030",
             Self::Gbk => "GBK",
             Self::ShiftJis => "Shift-JIS",
@@ -81,6 +84,7 @@ impl Encoding {
             Self::Ascii => "ASCII (7-bit)",
             Self::Latin1 => "Latin-1 / ISO-8859-1 (Western European)",
             Self::Windows1252 => "Windows-1252 / ANSI (Western European)",
+            Self::Windows1250 => "Windows-1250 (Central European)",
             Self::Gb18030 => "GB18030 (Chinese)",
             Self::Gbk => "GBK (Chinese Simplified)",
             Self::ShiftJis => "Shift-JIS (Japanese)",
@@ -96,6 +100,7 @@ impl Encoding {
             Self::Utf16Be => encoding_rs::UTF_16BE,
             Self::Latin1 => encoding_rs::WINDOWS_1252, // ISO-8859-1 maps to Windows-1252 per WHATWG
             Self::Windows1252 => encoding_rs::WINDOWS_1252,
+            Self::Windows1250 => encoding_rs::WINDOWS_1250,
             Self::Gb18030 => encoding_rs::GB18030,
             Self::Gbk => encoding_rs::GBK,
             Self::ShiftJis => encoding_rs::SHIFT_JIS,
@@ -128,6 +133,7 @@ impl Encoding {
             Self::Ascii,
             Self::Latin1,
             Self::Windows1252,
+            Self::Windows1250,
             Self::Gb18030,
             Self::Gbk,
             Self::ShiftJis,
@@ -152,7 +158,7 @@ impl Encoding {
     pub fn is_resynchronizable(&self) -> bool {
         match self {
             // Fixed-width single byte - every byte is a character
-            Self::Ascii | Self::Latin1 | Self::Windows1252 => true,
+            Self::Ascii | Self::Latin1 | Self::Windows1252 | Self::Windows1250 => true,
 
             // UTF-8 has unique bit patterns for lead vs continuation bytes
             Self::Utf8 | Self::Utf8Bom => true,
@@ -174,7 +180,7 @@ impl Encoding {
     pub fn alignment(&self) -> Option<usize> {
         match self {
             // Single-byte encodings - no alignment needed
-            Self::Ascii | Self::Latin1 | Self::Windows1252 => Some(1),
+            Self::Ascii | Self::Latin1 | Self::Windows1252 | Self::Windows1250 => Some(1),
 
             // UTF-8 - no alignment needed (self-synchronizing)
             Self::Utf8 | Self::Utf8Bom => Some(1),
@@ -534,6 +540,7 @@ mod tests {
         assert_eq!(Encoding::Utf8Bom.display_name(), "UTF-8 BOM");
         assert_eq!(Encoding::Utf16Le.display_name(), "UTF-16 LE");
         assert_eq!(Encoding::Gb18030.display_name(), "GB18030");
+        assert_eq!(Encoding::Windows1250.display_name(), "Windows-1250");
     }
 
     #[test]
@@ -542,6 +549,7 @@ mod tests {
         assert!(Encoding::Utf16Le.has_bom());
         assert!(!Encoding::Utf8.has_bom());
         assert!(!Encoding::Windows1252.has_bom());
+        assert!(!Encoding::Windows1250.has_bom());
     }
 
     #[test]
@@ -623,6 +631,7 @@ mod tests {
         assert!(Encoding::Ascii.is_resynchronizable());
         assert!(Encoding::Latin1.is_resynchronizable());
         assert!(Encoding::Windows1252.is_resynchronizable());
+        assert!(Encoding::Windows1250.is_resynchronizable());
 
         // UTF-16 is resynchronizable with proper alignment
         assert!(Encoding::Utf16Le.is_resynchronizable());
@@ -642,6 +651,7 @@ mod tests {
         assert_eq!(Encoding::Ascii.alignment(), Some(1));
         assert_eq!(Encoding::Latin1.alignment(), Some(1));
         assert_eq!(Encoding::Windows1252.alignment(), Some(1));
+        assert_eq!(Encoding::Windows1250.alignment(), Some(1));
         assert_eq!(Encoding::Utf8.alignment(), Some(1));
         assert_eq!(Encoding::Utf8Bom.alignment(), Some(1));
 
@@ -662,6 +672,7 @@ mod tests {
         assert!(!Encoding::Utf8.requires_full_file_load());
         assert!(!Encoding::Ascii.requires_full_file_load());
         assert!(!Encoding::Latin1.requires_full_file_load());
+        assert!(!Encoding::Windows1250.requires_full_file_load());
         assert!(!Encoding::Utf16Le.requires_full_file_load());
 
         // Encodings that require full loading
@@ -669,5 +680,55 @@ mod tests {
         assert!(Encoding::Gbk.requires_full_file_load());
         assert!(Encoding::ShiftJis.requires_full_file_load());
         assert!(Encoding::EucKr.requires_full_file_load());
+    }
+
+    #[test]
+    fn test_convert_roundtrip_windows1250() {
+        // Windows-1250 encoded text with Central European characters
+        // "Zażółć" in Windows-1250: Z(0x5A) a(0x61) ż(0xBF) ó(0xF3) ł(0xB3) ć(0xE6)
+        let windows1250_bytes: &[u8] = &[0x5A, 0x61, 0xBF, 0xF3, 0xB3, 0xE6];
+
+        // Convert to UTF-8
+        let enc_rs = Encoding::Windows1250.to_encoding_rs();
+        let (decoded, _had_errors) = enc_rs.decode_without_bom_handling(windows1250_bytes);
+        let utf8_content = decoded.as_bytes();
+
+        // The UTF-8 content should contain the Polish characters
+        let utf8_str = std::str::from_utf8(utf8_content).unwrap();
+        assert!(
+            utf8_str.contains('ż'),
+            "Should contain ż: {}",
+            utf8_str
+        );
+        assert!(
+            utf8_str.contains('ó'),
+            "Should contain ó: {}",
+            utf8_str
+        );
+        assert!(
+            utf8_str.contains('ł'),
+            "Should contain ł: {}",
+            utf8_str
+        );
+        assert!(
+            utf8_str.contains('ć'),
+            "Should contain ć: {}",
+            utf8_str
+        );
+
+        // Convert back to Windows-1250
+        let back = convert_from_utf8(utf8_content, Encoding::Windows1250);
+        assert_eq!(
+            back, windows1250_bytes,
+            "Round-trip should preserve bytes"
+        );
+    }
+
+    #[test]
+    fn test_windows1250_description() {
+        assert_eq!(
+            Encoding::Windows1250.description(),
+            "Windows-1250 (Central European)"
+        );
     }
 }

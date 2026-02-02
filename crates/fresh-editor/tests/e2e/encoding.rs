@@ -43,6 +43,7 @@ enum TestEncoding {
     Utf16Be,
     Latin1,
     Windows1252,
+    Windows1250,
     Gb18030,
     Ascii,
 }
@@ -95,6 +96,51 @@ impl TestEncoding {
                     })
                     .collect()
             }
+            TestEncoding::Windows1250 => {
+                // Windows-1250 (Central European)
+                // For testing, we encode common Polish/Czech characters
+                let mut result = Vec::new();
+                for c in text.chars() {
+                    let byte = match c {
+                        // Common Central European characters in Windows-1250
+                        'ą' => 0xB9,
+                        'ć' => 0xE6,
+                        'ę' => 0xEA,
+                        'ł' => 0xB3,
+                        'ń' => 0xF1,
+                        'ó' => 0xF3,
+                        'ś' => 0x9C,
+                        'ź' => 0x9F,
+                        'ż' => 0xBF,
+                        'Ą' => 0xA5,
+                        'Ć' => 0xC6,
+                        'Ę' => 0xCA,
+                        'Ł' => 0xA3,
+                        'Ń' => 0xD1,
+                        'Ó' => 0xD3,
+                        'Ś' => 0x8C,
+                        'Ź' => 0x8F,
+                        'Ż' => 0xAF,
+                        // Czech characters
+                        'č' => 0xE8,
+                        'ě' => 0xEC,
+                        'ř' => 0xF8,
+                        'š' => 0x9A,
+                        'ů' => 0xF9,
+                        'ž' => 0x9E,
+                        'Č' => 0xC8,
+                        'Ě' => 0xCC,
+                        'Ř' => 0xD8,
+                        'Š' => 0x8A,
+                        'Ů' => 0xD9,
+                        'Ž' => 0x8E,
+                        c if c.is_ascii() => c as u8,
+                        _ => b'?', // Replacement for unmapped chars
+                    };
+                    result.push(byte);
+                }
+                result
+            }
             TestEncoding::Gb18030 => {
                 // For testing, we'll use a simple mapping for common Chinese chars
                 // In real implementation, this would use encoding_rs
@@ -132,6 +178,44 @@ impl TestEncoding {
             TestEncoding::Latin1 | TestEncoding::Windows1252 => {
                 text.chars().all(|c| (c as u32) <= 0xFF)
             }
+            TestEncoding::Windows1250 => {
+                // Windows-1250 can encode ASCII and specific Central European characters
+                text.chars().all(|c| {
+                    c.is_ascii()
+                        || matches!(
+                            c,
+                            'ą' | 'ć'
+                                | 'ę'
+                                | 'ł'
+                                | 'ń'
+                                | 'ó'
+                                | 'ś'
+                                | 'ź'
+                                | 'ż'
+                                | 'Ą'
+                                | 'Ć'
+                                | 'Ę'
+                                | 'Ł'
+                                | 'Ń'
+                                | 'Ó'
+                                | 'Ś'
+                                | 'Ź'
+                                | 'Ż'
+                                | 'č'
+                                | 'ě'
+                                | 'ř'
+                                | 'š'
+                                | 'ů'
+                                | 'ž'
+                                | 'Č'
+                                | 'Ě'
+                                | 'Ř'
+                                | 'Š'
+                                | 'Ů'
+                                | 'Ž'
+                        )
+                })
+            }
             TestEncoding::Ascii => text.is_ascii(),
             TestEncoding::Gb18030 => {
                 // GB18030 can encode all Unicode, but our test implementation is limited
@@ -151,6 +235,7 @@ impl TestEncoding {
             TestEncoding::Utf16Be => "UTF-16 BE",
             TestEncoding::Latin1 => "Latin-1",
             TestEncoding::Windows1252 => "Windows-1252",
+            TestEncoding::Windows1250 => "Windows-1250",
             TestEncoding::Gb18030 => "GB18030",
             TestEncoding::Ascii => "ASCII",
         }
@@ -1119,4 +1204,286 @@ fn test_utf8_to_utf16_encoding_change() {
         decoded.contains("こんにちは"),
         "Saved file should preserve Japanese characters"
     );
+}
+
+// ============================================================================
+// Windows-1250 (Central European) Encoding Tests
+// ============================================================================
+
+/// Comprehensive test for Windows-1250 encoding:
+/// - Display of Polish diacritical characters
+/// - Encoding selector shows Windows-1250 (Central European)
+/// - Encoding change via selector works
+#[test]
+fn test_windows1250_display_and_selector() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Test 1: Display Windows-1250 encoded Polish characters
+    let polish_file = temp_dir.path().join("polish.txt");
+    // "Zażółć gęślą jaźń" - famous Polish pangram in Windows-1250
+    let windows1250_bytes: &[u8] = &[
+        0x5A, 0x61, 0xBF, 0xF3, 0xB3, 0xE6, // "Zażółć"
+        0x20, 0x67, 0xEA, 0x9C, 0x6C, 0xB9, // " gęślą"
+        0x20, 0x6A, 0x61, 0x9F, 0xF1, 0x0A, // " jaźń\n"
+    ];
+    std::fs::write(&polish_file, windows1250_bytes).unwrap();
+
+    let mut harness = EditorTestHarness::new(100, 24).unwrap();
+    harness.open_file(&polish_file).unwrap();
+    harness.render().unwrap();
+
+    // Verify Polish characters are displayed (converted to UTF-8 internally)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains('ż') || screen.contains('ó') || screen.contains('ł'),
+        "Screen should contain Polish diacritical characters"
+    );
+
+    // Test 2: Encoding selector and change
+    let utf8_file = temp_dir.path().join("utf8.txt");
+    std::fs::write(&utf8_file, "Hello World!\n").unwrap();
+
+    drop(harness);
+    let mut harness = EditorTestHarness::new(100, 24).unwrap();
+    harness.open_file(&utf8_file).unwrap();
+    harness.render().unwrap();
+
+    // Click on encoding indicator to open selector
+    let (col, row) = harness
+        .find_text_on_screen("ASCII")
+        .expect("Encoding indicator should be visible");
+    harness.mouse_click(col, row).unwrap();
+    harness.assert_screen_contains("Encoding:");
+
+    // Filter for Windows-1250 and verify it shows with description
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("1250").unwrap();
+    harness.render().unwrap();
+
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Windows-1250") && screen.contains("Central European"),
+        "Selector should show Windows-1250 (Central European)"
+    );
+
+    // Select and verify encoding changed
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.assert_screen_contains("Windows-1250");
+}
+
+/// Test Windows-1250 encoding conversions:
+/// - UTF-8 → Windows-1250 → save → verify on disk
+/// - Continue: Windows-1250 → UTF-8 → save → verify on disk (bidirectional)
+/// - Fresh load: Load Windows-1250 from disk → UTF-8 → save → verify on disk
+#[test]
+fn test_windows1250_encoding_conversions() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("conversion_test.txt");
+
+    // Start with UTF-8 file containing Polish text
+    std::fs::write(&file_path, "Zażółć gęślą\n").unwrap();
+
+    let mut harness = EditorTestHarness::new(100, 24).unwrap();
+    harness.open_file(&file_path).unwrap();
+    harness.render().unwrap();
+
+    // Part 1: UTF-8 → Windows-1250 → save
+    let (col, row) = harness
+        .find_text_on_screen("UTF-8")
+        .expect("UTF-8 indicator should be visible");
+    harness.mouse_click(col, row).unwrap();
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("Windows-1250").unwrap();
+    harness.render().unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Char('s'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+    let _ = harness.wait_until(|h| !h.editor().active_state().buffer.is_modified());
+
+    // Verify file is Windows-1250 encoded ('ż'=0xBF, 'ł'=0xB3)
+    let saved = std::fs::read(&file_path).unwrap();
+    assert!(
+        saved.contains(&0xBF) || saved.contains(&0xB3),
+        "File should be Windows-1250 encoded"
+    );
+    let (decoded, _) = encoding_rs::WINDOWS_1250.decode_without_bom_handling(&saved);
+    assert!(decoded.contains("Zażółć"), "Should preserve Polish text");
+
+    // Part 2: Fresh load Windows-1250 from disk → UTF-8 → save
+    // Close and reopen to simulate loading from disk
+    drop(harness);
+    let mut harness = EditorTestHarness::new(100, 24).unwrap();
+    harness.open_file(&file_path).unwrap();
+    harness.render().unwrap();
+
+    // File may be detected as Windows-1252 (chardetng can't distinguish 1250 vs 1252)
+    // Find encoding indicator and change to UTF-8
+    let (col, row) = harness
+        .find_text_on_screen("Windows")
+        .expect("Windows encoding indicator should be visible");
+    harness.mouse_click(col, row).unwrap();
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("UTF-8").unwrap();
+    harness.render().unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Char('s'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+    let _ = harness.wait_until(|h| !h.editor().active_state().buffer.is_modified());
+
+    // Verify file is now valid UTF-8
+    // Note: If detected as Windows-1252, some chars may differ (ś→œ, ć→æ)
+    // but the file should be valid UTF-8 regardless
+    let saved = std::fs::read(&file_path).unwrap();
+    let utf8_str = std::str::from_utf8(&saved).expect("File should be valid UTF-8");
+    // Check that common chars (ó, ł) that are same in both encodings are preserved
+    assert!(
+        utf8_str.contains('ó') || utf8_str.contains('ł'),
+        "UTF-8 file should contain some Polish chars. Got: {}",
+        utf8_str
+    );
+}
+
+/// Test loading files in various encodings from disk and saving as UTF-8
+/// This tests the full flow: create encoded file → load → save as UTF-8 → verify
+/// Covers all supported encodings with detectable content.
+#[test]
+fn test_all_encodings_load_and_save_as_utf8() {
+    struct TestCase {
+        desc: &'static str,
+        bytes: &'static [u8],
+        expected_substr: &'static str,
+    }
+
+    let test_cases: &[TestCase] = &[
+        // UTF-16 LE with BOM: "Héllo"
+        TestCase {
+            desc: "UTF-16 LE",
+            bytes: &[
+                0xFF, 0xFE, // BOM
+                0x48, 0x00, 0xE9, 0x00, 0x6C, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x0A, 0x00,
+            ],
+            expected_substr: "H",
+        },
+        // UTF-16 BE with BOM: "Héllo"
+        TestCase {
+            desc: "UTF-16 BE",
+            bytes: &[
+                0xFE, 0xFF, // BOM
+                0x00, 0x48, 0x00, 0xE9, 0x00, 0x6C, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x0A,
+            ],
+            expected_substr: "H",
+        },
+        // UTF-8 with BOM: "Café"
+        TestCase {
+            desc: "UTF-8 BOM",
+            bytes: &[0xEF, 0xBB, 0xBF, 0x43, 0x61, 0x66, 0xC3, 0xA9, 0x0A],
+            expected_substr: "Café",
+        },
+        // UTF-8 without BOM: "Cześć" (Polish greeting)
+        TestCase {
+            desc: "UTF-8",
+            bytes: &[0x43, 0x7A, 0x65, 0xC5, 0x9B, 0xC4, 0x87, 0x0A], // "Cześć\n"
+            expected_substr: "Cze",
+        },
+        // Windows-1252: "Café" (é = 0xE9 in Windows-1252)
+        TestCase {
+            desc: "Windows-1252",
+            bytes: &[0x43, 0x61, 0x66, 0xE9, 0x0A],
+            expected_substr: "Café",
+        },
+        // Windows-1250: Polish "ółć" (ó=0xF3, ł=0xB3, ć=0xE6)
+        // These bytes are same in Win-1252, so detection may vary, but conversion works
+        TestCase {
+            desc: "Windows-1250",
+            bytes: &[0xF3, 0xB3, 0xE6, 0x0A],
+            expected_substr: "ó",
+        },
+        // Note: CJK encodings (GB18030, GBK, Shift-JIS, EUC-KR) have ambiguous
+        // detection - the same bytes can be valid in multiple encodings.
+        // These are tested in property tests (prop_all_encodings_roundtrip_exact)
+        // which use encoding_rs directly without relying on auto-detection.
+    ];
+
+    let temp_dir = TempDir::new().unwrap();
+
+    for (i, tc) in test_cases.iter().enumerate() {
+        let file_path = temp_dir.path().join(format!("test_{}.txt", i));
+        std::fs::write(&file_path, tc.bytes).unwrap();
+
+        let mut harness = EditorTestHarness::new(100, 24).unwrap();
+        harness.open_file(&file_path).unwrap();
+        harness.render().unwrap();
+
+        // Find encoding indicator and change to UTF-8
+        let encoding_pos = harness
+            .find_text_on_screen("UTF-16")
+            .or_else(|| harness.find_text_on_screen("UTF-8"))
+            .or_else(|| harness.find_text_on_screen("Windows"))
+            .or_else(|| harness.find_text_on_screen("Latin"))
+            .or_else(|| harness.find_text_on_screen("GB18030"))
+            .or_else(|| harness.find_text_on_screen("GBK"))
+            .or_else(|| harness.find_text_on_screen("Shift"))
+            .or_else(|| harness.find_text_on_screen("EUC"))
+            .or_else(|| harness.find_text_on_screen("ASCII"));
+
+        let (col, row) = encoding_pos.unwrap_or_else(|| {
+            panic!(
+                "Test {} ({}): Could not find encoding indicator",
+                i, tc.desc
+            )
+        });
+
+        harness.mouse_click(col, row).unwrap();
+        harness
+            .send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)
+            .unwrap();
+        harness.type_text("UTF-8").unwrap();
+        harness.render().unwrap();
+        harness
+            .send_key(KeyCode::Enter, KeyModifiers::NONE)
+            .unwrap();
+
+        // Save
+        harness
+            .send_key(KeyCode::Char('s'), KeyModifiers::CONTROL)
+            .unwrap();
+        harness.render().unwrap();
+        let _ = harness.wait_until(|h| !h.editor().active_state().buffer.is_modified());
+
+        // Verify saved file is valid UTF-8 and contains expected content
+        let saved = std::fs::read(&file_path).unwrap();
+        let utf8_str = std::str::from_utf8(&saved).unwrap_or_else(|e| {
+            panic!(
+                "Test {} ({}): File should be valid UTF-8. Error: {}. Bytes: {:?}",
+                i, tc.desc, e, saved
+            )
+        });
+        assert!(
+            utf8_str.contains(tc.expected_substr),
+            "Test {} ({}): Expected '{}' in saved file. Got: {}",
+            i,
+            tc.desc,
+            tc.expected_substr,
+            utf8_str
+        );
+
+        drop(harness);
+    }
 }
