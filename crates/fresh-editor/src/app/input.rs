@@ -2071,6 +2071,8 @@ impl Editor {
                 let enc = Encoding::all()[current_index];
                 prompt.input = format!("{} ({})", enc.display_name(), enc.description());
                 prompt.cursor_pos = prompt.input.len();
+                // Select all text so typing immediately replaces it
+                prompt.selection_anchor = Some(0);
             }
         }
     }
