@@ -128,8 +128,9 @@ def main():
     latest_version = versions[-1].name
     print(f"Latest version: {latest_version}")
 
-    # Create branch
+    # Create branch (delete if leftover from a previous attempt)
     print(f"Creating branch {branch_name}...")
+    run(["git", "branch", "-D", branch_name], check=False)
     run(["git", "checkout", "-b", branch_name])
 
     # Copy manifests
