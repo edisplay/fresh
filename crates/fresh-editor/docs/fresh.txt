@@ -10,84 +10,287 @@
 
 [1m[92mEasy To Use[0m | [1m[95mTypeScript Extensible[0m | [1m[94mLight And Fast[0m | [1m[93mHuge File Support[0m
 
+[2mFull documentation:[0m [1m[94mhttps://getfresh.dev/docs[0m
+
+  Fresh is a terminal text editor with multi-cursor editing, macros,
+  integrated terminal, LSP support (completion, diagnostics, rename,
+  code actions), a TypeScript plugin system, session persistence,
+  SSH remote editing, a package manager, themes, and i18n.
+
+  Everything is discoverable from two places: the [1mcommand palette[0m
+  (Ctrl+P / ^P) and the [1mmenu bar[0m at the top of the screen.
+  If you're not sure how to do something, start there. The
+  [1mShow Keybindings[0m command lists every shortcut.
+
+[2mPrivacy: Fresh checks for updates once daily, sending only the[0m
+  [2meditor version and OS type — no personal data, file contents, or[0m
+  [2musage behavior. Disable with[0m [32m"check_for_updates": false[0m [2min config[0m
+  [2mor[0m [32m--no-upgrade-check[0m [2mon the CLI (also in Settings editor).[0m
+
 [1m[96m╔════════════════════════════════════════════════════════════╗[0m
-[1m[96m║[0m                    [1m[93mGETTING STARTED[0m                         [1m[96m║[0m
+[1m[96m║[0m                   [1m[93mCOMMAND PALETTE[0m                          [1m[96m║[0m
 [1m[96m╚════════════════════════════════════════════════════════════╝[0m
 
-[1m[92m🎯 Discover Everything[0m
-[2m────────────────────────────────────────────────────────────[0m
-  [36m•[0m [1mCommand Palette: [0m  Search and run any command by name
-  [36m•[0m [1mMenu Bar:[0m          Browse all features organized by category
-  [36m•[0m [1mMouse:[0m             Click menus, tabs, scrollbars - it all works
-  [36m•[0m [1mShow Keybindings:[0m  View all shortcuts for your platform
+  Ctrl+P / ^P opens the command palette. It defaults to command
+  mode ([1m>[0m prefix). Backspace to clear the prefix and switch modes:
 
-[1m[95m📁 Working with Files[0m
-[2m────────────────────────────────────────────────────────────[0m
-  [36m•[0m [1mFile Explorer:[0m     Sidebar for browsing project files
-  [36m•[0m [1mTabs:[0m              Switch between open buffers
-  [36m•[0m [1mSplits:[0m            View multiple files side-by-side
-  [36m•[0m [1mGit Find File:[0m     Fuzzy search across git-tracked files
+  [1m>[0m            run commands [1m(default)[0m
+  [1m(no prefix)[0m  fuzzy file search
+  [1m#[0m            switch between open buffers
+  [1m:[0m            go to line number
 
-[1m[94m✏️  Editing[0m
+  Queries are split on spaces — each term must match independently,
+  so "feat view" finds "features/groups/view.tsx". Tab accepts
+  the top result.
+
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m                        [1m[93mEDITING[0m                             [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+[1m[92mMultiple Cursors & Block Selection[0m
 [2m────────────────────────────────────────────────────────────[0m
-  [36m•[0m [1mMulti-cursor:[0m      Edit multiple places simultaneously
-  [36m•[0m [1mSearch & Replace:[0m  Find text with interactive replacement
-  [36m•[0m [1mUndo/Redo:[0m         Full edit history preserved
-  [36m•[0m [1mComments:[0m          Toggle line comments (language-aware)
+  "Add Cursor at Next Occurrence" adds a cursor at the next
+  match of your selection (or selects the word under cursor
+  first). You can also add cursors above/below. All editing operations — typing, delete,
+  paste — apply to every cursor simultaneously.
+
+  Block selection (rectangular) is also available. When you type or
+  delete in a block selection, it converts to multiple cursors
+  automatically.
+
+[1m[95mMacros & Bookmarks[0m
+[2m────────────────────────────────────────────────────────────[0m
+  Fresh has 10 macro recording slots and 10 bookmark slots. Record a
+  macro, replay it, set bookmarks and jump to them — all via the
+  command palette or their keybindings. Both are per-session.
+
+[1m[94mShell Piping[0m
+[2m────────────────────────────────────────────────────────────[0m
+  The "Shell Command" action pipes the buffer (or selection) through
+  a shell command and shows the output. A variant replaces the
+  selection with the output. Useful for formatting, sorting, or
+  transforming text with any unix tool.
+
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m                 [1m[93mSEARCH & REPLACE[0m                           [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+  Search and Replace are in the Edit menu and command palette.
+  Supports regex. Interactive replace highlights each match and you
+  press y (yes), n (skip), ! (replace all remaining), or q (quit).
+
+  "Find Next Occurrence" / "Find Previous Occurrence" search
+  for the word under cursor without opening a panel — useful
+  for quick navigation through a symbol's usages.
+
+  The Git Grep plugin provides project-wide search with live preview
+  via the command palette.
 
 [1m[96m╔════════════════════════════════════════════════════════════╗[0m
 [1m[96m║[0m                  [1m[93mINTEGRATED TERMINAL[0m                       [1m[96m║[0m
 [1m[96m╚════════════════════════════════════════════════════════════╝[0m
 
-[1m[92m💻 Terminal Modes[0m  [2m(Command Palette → "Open Terminal")[0m
-[2m────────────────────────────────────────────────────────────[0m
-  The terminal has two modes, shown in the status bar:
+  Open a terminal from the command palette. The terminal has two
+  modes (shown in the status bar): [1mTerminal[0m (keys go to shell) and
+  [1mTerminal (read only)[0m (scrollback — you can scroll, search, and
+  copy text). Toggle between them via the command palette or its
+  keybinding.
 
-  [1mTerminal[0m               Keys go directly to the shell
-  [1mTerminal (read only)[0m   Scrollback mode - scroll and search output
+  Most editor shortcuts still work in terminal mode. If a terminal
+  app needs keys that the editor would intercept, toggle
+  [1mkeyboard capture[0m — the UI dims to indicate ALL keys (except
+  the capture toggle itself) go to the terminal.
 
-  [36m•[0m [1mToggle Mode:[0m       Switch between terminal and scrollback
-  [36m•[0m [1mKeyboard Capture:[0m  Send ALL keys to terminal (UI dims)
-                       - Use this when terminal apps need special keys
+  You can open multiple terminals as tabs. Scrollback history is
+  preserved across editor restarts. Mouse events are forwarded to
+  terminal apps in alternate screen mode (vim, htop, etc.).
 
 [1m[96m╔════════════════════════════════════════════════════════════╗[0m
 [1m[96m║[0m                    [1m[93mLSP & CODE INTEL[0m                        [1m[96m║[0m
 [1m[96m╚════════════════════════════════════════════════════════════╝[0m
 
-[1m[95m🤖 Language Server Features[0m  [2m(requires LSP server installed)[0m
-[2m────────────────────────────────────────────────────────────[0m
-  [36m•[0m [1mGo to Definition:[0m  Jump to where a symbol is defined
-  [36m•[0m [1mFind References:[0m   See all usages of a symbol
-  [36m•[0m [1mHover:[0m             Mouse over symbols for documentation
-  [36m•[0m [1mCode Actions:[0m      Quick fixes and refactorings
-  [36m•[0m [1mRename Symbol:[0m     Rename across the entire project
-  [36m•[0m [1mDiagnostics:[0m       Errors and warnings shown inline
+  Fresh auto-detects installed language servers. Just install the
+  server binary and it works — built-in configs exist for many
+  languages (e.g. [32mrust-analyzer[0m, [32mgopls[0m, [32mclangd[0m, [32mpylsp[0m).
+  Open the Settings editor to see the full list under LSP.
 
-  All LSP commands are available in the Command Palette.
+  Features: completion, go-to-definition, find references, hover,
+  code actions, rename, inline diagnostics, semantic highlighting,
+  and inlay hints.
+
+  To add an LSP for a new language, use the Settings editor (command
+  palette > "Open Settings", then search for "lsp") to add both a
+  language and LSP entry with matching keys. You can also pass
+  [32m"initialization_options"[0m and set [32m"process_limits"[0m to cap memory
+  and CPU. LSP can be toggled per-buffer via the command palette.
 
 [1m[96m╔════════════════════════════════════════════════════════════╗[0m
-[1m[96m║[0m                    [1m[93mCONFIGURATION[0m                          [1m[96m║[0m
+[1m[96m║[0m                     [1m[93mCONFIGURATION[0m                          [1m[96m║[0m
 [1m[96m╚════════════════════════════════════════════════════════════╝[0m
 
-[1m[94m⚙️  Settings[0m
+[1m[92mSettings & Layers[0m
 [2m────────────────────────────────────────────────────────────[0m
-  [36m•[0m [1mSettings UI:[0m       Visual editor for all options
-  [36m•[0m [1mUser config:[0m       [32m~/.config/fresh/config.json[0m
-  [36m•[0m [1mProject config:[0m    [32m.fresh/config.json[0m [2m(overrides user)[0m
+  The Settings editor (Edit > Settings, or command palette) groups
+  all options by category with search and inline descriptions. A
+  layer selector chooses where changes are saved:
 
-[1m[93m🔧 Adding LSP for a Language[0m
+  [36m•[0m [1mUser[0m      [32m~/.config/fresh/config.json[0m  [2m(personal defaults)[0m
+  [36m•[0m [1mProject[0m   [32m.fresh/config.json[0m           [2m(shared via VCS)[0m
+  [36m•[0m [1mSession[0m   Temporary overrides, not persisted.
+
+  Layers override bottom-up: [1mSession > Project > User > Defaults[0m.
+  Nested objects (editor, lsp, languages) are [1mdeep-merged[0m — a
+  project config setting only [32m"editor.tab_size"[0m won't clobber your
+  other user settings. Lists (keybindings, on_save) are [1mreplaced[0m
+  [1mentirely[0m by higher layers.
+
+  For complex config (LSP init options, keybinding arrays), click
+  [1mEdit[0m in the Settings footer to open the raw JSON. Only
+  non-default values need to be present.
+
+[1m[95mKeybindings[0m
 [2m────────────────────────────────────────────────────────────[0m
-  Add to your config.json:
-  [2m{[0m
-  [2m  "lsp": {[0m
-  [2m    "mylang": { "command": "my-lsp-server", "enabled": true }[0m
-  [2m  }[0m
-  [2m}[0m
+  Fresh has three base keymaps: [1mdefault[0m, [1memacs[0m, and [1mmacos[0m. Switch
+  via View > Keybinding Style or the Settings editor. Custom
+  bindings in the [32m"keybindings"[0m array take precedence over the keymap.
 
-[1m[37m📚 Learn More[0m
+  The Keybinding Editor (Edit > Keybinding Editor) lets you browse
+  all bindings in a searchable table. Press [32m/[0m to text-search, [32mr[0m to
+  find a binding by pressing the actual key combo, [32mc[0m/[32ms[0m to
+  filter by context or source. Add, edit, and delete visually.
+
+  Bindings have a [32m"when"[0m context: [1mglobal[0m (always), [1mnormal[0m (editor),
+  [1mprompt[0m, [1mpopup[0m, [1mfile_explorer[0m, [1mmenu[0m, [1mterminal[0m. The same key can
+  do different things depending on focus.
+
+[1m[94mThemes[0m
 [2m────────────────────────────────────────────────────────────[0m
-  [32mdocs/USER_GUIDE.md[0m          Comprehensive documentation
-  [32mdocs/PLUGIN_DEVELOPMENT.md[0m  Build your own plugins
-  [32mlocales/[0m                    Available languages (i18n)
+  Select Theme from the command palette. To customize, use
+  Edit Theme — a live visual editor where you tweak colors and
+  see changes immediately. Built-in themes can't be modified
+  directly but "Save As" forks them. Custom themes are JSON
+  in [32m~/.config/fresh/themes/[0m using [R,G,B] arrays. Community
+  themes are installable via the package manager.
 
-[2mPress [1mq[0m[2m or [1mEsc[0m[2m to close  |  Use [1mShow Keybindings[0m[2m command to see shortcuts[0m
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m                       [1m[93mPLUGINS[0m                              [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+  Plugins are TypeScript running in a QuickJS sandbox. Each plugin
+  gets its own isolated context. Fresh ships with TODO Highlighter,
+  Git Grep (project-wide search), and Git Find File.
+
+  The package manager (command palette > "pkg:") installs plugins,
+  themes, language packs, and bundles from a git registry. You can
+  also install from any git URL, including monorepo subdirectories
+  via URL fragment ([32mhttps://github.com/user/repo#packages/foo[0m).
+
+  Scaffold new packages with
+  [32mfresh --init plugin|theme|language|bundle[0m.
+  Packages are stored under [32m~/.config/fresh/plugins/packages/[0m,
+  [32m~/.config/fresh/themes/packages/[0m, and [32m~/.config/fresh/grammars/[0m.
+
+  [2mExperimental plugins: Vi Mode (modal editing with operators,[0m
+  [2mmotions, text objects), Diagnostics Panel, Side-by-Side Diff.[0m
+
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m              [1m[93mSESSION PERSISTENCE[0m  [2m(Experimental)[0m           [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+  [32mfresh -a[0m starts (or reattaches to) a background server for the
+  current directory. The "Detach" command (File menu or command
+  palette) disconnects the client while the editor keeps running
+  with all state intact. [32mfresh -a[0m from the same directory
+  reattaches. Quit exits both client and server.
+
+  Named sessions ([32mfresh -a myname[0m) allow multiple sessions per
+  directory. [32mfresh --cmd session list/kill[0m manages running
+  sessions.
+  You can open files in a running session without attaching:
+  [32mfresh --cmd session open-file . src/main.rs:42[0m — useful for
+  integrating Fresh with file managers or other tools.
+
+  [2mWorkspace state (open files, splits, cursor positions, undo[0m
+  [2mhistory) is saved even in direct mode (without -a).[0m
+  [2mSession mode additionally preserves running terminal processes.[0m
+
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m                [1m[93mREMOTE EDITING (SSH)[0m  [2m(Experimental)[0m        [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+  [32mfresh user@host:/path/to/file[0m edits a remote file over SSH.
+  [32mfresh user@host:~[0m opens the remote home directory in the file
+  explorer. Supports password and key auth, sudo save for protected
+  files, and efficient patched saves (only changed bytes transfer).
+  Requires Python 3 on the remote host. Status bar shows
+  [32m[SSH:user@host][0m.
+
+  Alternative: SSH into the machine and run [32mfresh -a[0m directly on
+  the remote host for a persistent session that survives dropped
+  connections.
+
+[1m[96m╔════════════════════════════════════════════════════════════╗[0m
+[1m[96m║[0m                     [1m[93mGOOD TO KNOW[0m                           [1m[96m║[0m
+[1m[96m╚════════════════════════════════════════════════════════════╝[0m
+
+[1m[92mFile Handling[0m
+[2m────────────────────────────────────────────────────────────[0m
+  Fresh auto-detects text encoding and converts to UTF-8 in memory.
+  Many encodings are supported (UTF-16, GBK, Shift-JIS, Latin-1,
+  etc.). The on-disk encoding and line ending format (LF/CRLF/CR)
+  are shown in the status bar — click either to change.
+
+  The CLI accepts [32mfile:line:col[0m syntax, multiple files, and stdin
+  piping ([32mecho hello | fresh -[0m). Binary files open read-only. If a
+  save fails due to permissions, Fresh offers a sudo fallback.
+
+  Unsaved changes are auto-recovered from
+  [32m~/.local/share/fresh/recovery/[0m if the editor crashes.
+
+[1m[95mGit Integration[0m
+[2m────────────────────────────────────────────────────────────[0m
+  The gutter shows git diff indicators (green = added, yellow =
+  modified, red = deleted). The file explorer shows per-file git
+  status (M/A/U) with hover tooltips showing diff stats. Parent
+  folders show a dot when they contain unsaved files.
+
+[1m[94mEditor Features[0m
+[2m────────────────────────────────────────────────────────────[0m
+  Bracket matching highlights pairs with rainbow colors by nesting
+  depth. Pressing Enter between brackets expands them with correct
+  indentation. Line wrap is available (command palette) — Up/Down
+  and Home/End move by visual line when wrapping is enabled.
+
+  The status bar language indicator is clickable to switch
+  syntax.
+  Relative line numbers and cursor style (block/bar/underline)
+  are configurable via the Settings editor or command palette.
+
+[1m[93mmacOS[0m
+[2m────────────────────────────────────────────────────────────[0m
+  Fresh auto-detects macOS and uses an appropriate keymap. Some key
+  combinations require terminal-specific configuration,
+  particularly in Terminal.app and iTerm2 (Option-as-Meta,
+  Shift+Arrow mappings).
+  Kitty and Ghostty work best out of the box. See the online docs
+  for per-terminal setup instructions. If keys aren't working, use
+  Help > Debug Keyboard Events or the "Calibrate Keyboard" command.
+
+[1m[92mI18n[0m
+[2m────────────────────────────────────────────────────────────[0m
+  UI language is auto-detected from your system locale. Change it
+  via the command palette ("Select Locale"), View > Select Locale,
+  or from the CLI with [32mfresh --locale es[0m.
+
+[1m[95mTerminal Colors[0m
+[2m────────────────────────────────────────────────────────────[0m
+  Fresh auto-detects truecolor/256/16 support. GNU Screen and tmux
+  may interfere — override with [32mFRESH_COLOR_MODE=256 fresh[0m if
+  colors look wrong.
+
+[2m────────────────────────────────────────────────────────────[0m
+[1m[37mFull documentation:[0m [1m[94mhttps://getfresh.dev/docs[0m
+[1m[37mReport issues:[0m      [1m[94mhttps://github.com/sinelaw/fresh/issues[0m
+[2m────────────────────────────────────────────────────────────[0m
+
+[2mPress [1mq[0m[2m or [1mEsc[0m[2m to close this page[0m
