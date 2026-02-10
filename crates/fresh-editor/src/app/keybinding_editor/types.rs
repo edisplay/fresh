@@ -10,6 +10,8 @@ pub enum BindingSource {
     Keymap,
     /// User custom override (in config keybindings array)
     Custom,
+    /// Action exists but has no keybinding
+    Unbound,
 }
 
 /// A single resolved keybinding entry for display

@@ -152,6 +152,25 @@ impl KeybindingEditor {
             }
         }
 
+        // Add entries for actions that have no keybinding
+        let bound_actions: std::collections::HashSet<String> =
+            bindings.iter().map(|b| b.action.clone()).collect();
+        for action_name in Action::all_action_names() {
+            if !bound_actions.contains(&action_name) {
+                let action_display = KeybindingResolver::format_action_from_str(&action_name);
+                bindings.push(ResolvedBinding {
+                    key_display: String::new(),
+                    action: action_name,
+                    action_display,
+                    context: String::new(),
+                    source: BindingSource::Unbound,
+                    key_code: KeyCode::Null,
+                    modifiers: KeyModifiers::NONE,
+                    is_chord: false,
+                });
+            }
+        }
+
         // Sort by context, then by action name
         bindings.sort_by(|a, b| {
             a.context

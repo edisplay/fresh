@@ -431,10 +431,10 @@ fn render_table(frame: &mut Frame, area: Rect, editor: &mut KeybindingEditor, th
             Span::styled(" ", source_style),
             Span::styled(
                 pad_right(
-                    &if binding.source == BindingSource::Custom {
-                        t!("keybinding_editor.source_custom").to_string()
-                    } else {
-                        t!("keybinding_editor.source_keymap").to_string()
+                    &match binding.source {
+                        BindingSource::Custom => t!("keybinding_editor.source_custom").to_string(),
+                        BindingSource::Keymap => t!("keybinding_editor.source_keymap").to_string(),
+                        BindingSource::Unbound => String::new(),
                     },
                     source_col_width as usize,
                 ),
