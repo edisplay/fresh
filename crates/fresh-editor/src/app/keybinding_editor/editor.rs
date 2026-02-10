@@ -482,9 +482,27 @@ impl KeybindingEditor {
     pub fn delete_selected(&mut self) -> bool {
         if let Some(&idx) = self.filtered_indices.get(self.selected) {
             if self.bindings[idx].source == BindingSource::Custom {
+                let action_name = self.bindings[idx].action.clone();
                 self.pending_removes.push(idx);
                 self.bindings.remove(idx);
                 self.has_changes = true;
+
+                // If no other binding exists for this action, re-add as unbound
+                let still_bound = self.bindings.iter().any(|b| b.action == action_name);
+                if !still_bound {
+                    let action_display = KeybindingResolver::format_action_from_str(&action_name);
+                    self.bindings.push(ResolvedBinding {
+                        key_display: String::new(),
+                        action: action_name,
+                        action_display,
+                        context: String::new(),
+                        source: BindingSource::Unbound,
+                        key_code: KeyCode::Null,
+                        modifiers: KeyModifiers::NONE,
+                        is_chord: false,
+                    });
+                }
+
                 self.apply_filters();
                 return true;
             }

@@ -1025,6 +1025,225 @@ fn test_selected_item_stays_visible_when_scrolling() {
 }
 
 // ========================
+// Unbound actions
+// ========================
+
+/// Test that actions without a keybinding appear in the editor list
+#[test]
+fn test_unbound_actions_are_listed() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Search for "duplicate_line" which has no default keybinding
+    harness
+        .send_key(KeyCode::Char('/'), KeyModifiers::NONE)
+        .unwrap();
+    for ch in "duplicate_line".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    harness.render().unwrap();
+
+    // The unbound action should appear in search results
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("duplicate_line") || screen.contains("Duplicate"),
+        "Unbound action 'duplicate_line' should be listed in the keybinding editor"
+    );
+}
+
+/// Test that an unbound action can be edited (assign a key to it)
+#[test]
+fn test_edit_unbound_action() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Search for "duplicate_line" (unbound action)
+    harness
+        .send_key(KeyCode::Char('/'), KeyModifiers::NONE)
+        .unwrap();
+    for ch in "duplicate_line".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    // Press Enter to unfocus search, then navigate to first result
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Press Enter to open edit dialog on the unbound action
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Edit dialog should open
+    harness.assert_screen_contains("Edit Keybinding");
+    harness.assert_screen_contains("Key:");
+    harness.assert_screen_contains("Action:");
+
+    // The action field should show "duplicate_line"
+    harness.assert_screen_contains("duplicate_line");
+
+    // Record a key (dialog starts in RecordingKey mode)
+    harness
+        .send_key(
+            KeyCode::Char('d'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        )
+        .unwrap();
+    harness.render().unwrap();
+
+    // Tab to context, then to Save button
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Press Enter to save
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Dialog should be closed and editor should show modified
+    harness.assert_screen_not_contains("Edit Keybinding");
+    harness.assert_screen_contains("modified");
+}
+
+/// Test that deleting a custom binding makes the action appear as unbound
+#[test]
+fn test_deleted_binding_appears_as_unbound() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // First, add a custom binding for "duplicate_line"
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.assert_screen_contains("Add Keybinding");
+
+    // Record key: Ctrl+Shift+D
+    harness
+        .send_key(
+            KeyCode::Char('d'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        )
+        .unwrap();
+    harness.render().unwrap();
+
+    // Tab to action field and type "duplicate_line"
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    for ch in "duplicate_line".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    // Accept autocomplete
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Tab to context, then to Save button
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Press Enter to save
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Should show modified
+    harness.assert_screen_contains("modified");
+
+    // Now search for "duplicate_line" and filter to custom source
+    harness
+        .send_key(KeyCode::Char('/'), KeyModifiers::NONE)
+        .unwrap();
+    for ch in "duplicate_line".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    // Enter to unfocus search
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // The custom binding should be visible
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("custom"),
+        "Custom binding for duplicate_line should show 'custom' source"
+    );
+
+    // Navigate to the custom binding row (it should be one of the filtered results)
+    // Go to the first result which should be the custom one (or the unbound one)
+    harness.send_key(KeyCode::Home, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Find the custom one - cycle through results to find the "custom" row
+    // Look for the line with "custom" to know which row has the custom binding
+    let mut found_custom = false;
+    for _ in 0..5 {
+        let current_screen = harness.screen_to_string();
+        // Check if the selected row (marked with ">") contains "custom"
+        for line in current_screen.lines() {
+            if line.contains(">") && line.contains("custom") {
+                found_custom = true;
+                break;
+            }
+        }
+        if found_custom {
+            break;
+        }
+        harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+        harness.render().unwrap();
+    }
+
+    // Delete the custom binding
+    harness
+        .send_key(KeyCode::Char('d'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Now clear the search to see all results for duplicate_line
+    harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Search again to find duplicate_line
+    harness
+        .send_key(KeyCode::Char('/'), KeyModifiers::NONE)
+        .unwrap();
+    for ch in "duplicate_line".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    harness.render().unwrap();
+
+    // duplicate_line should still appear (now as unbound - no "custom" or "keymap" source)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("duplicate_line") || screen.contains("Duplicate"),
+        "After deleting the custom binding, duplicate_line should still appear as unbound"
+    );
+    // The "custom" source label should be gone (it's now unbound with empty source)
+    assert!(
+        !screen.contains("custom"),
+        "After deleting the custom binding, there should be no 'custom' source for duplicate_line"
+    );
+}
+
+// ========================
 // Terminal mode interaction
 // ========================
 
