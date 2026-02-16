@@ -90,6 +90,30 @@ impl StringBuffer {
         }
     }
 
+    /// Find the byte offset where `line_in_piece`-th line starts within a piece.
+    /// `piece_start`/`piece_end` define the piece's byte range in this buffer.
+    /// `line_in_piece` is 0-indexed: 0 means the first line of the piece (returns `piece_start`).
+    /// Returns `None` if line starts aren't available or the target line isn't in this piece.
+    pub fn nth_line_start_in_piece(
+        &self,
+        piece_start: usize,
+        piece_end: usize,
+        line_in_piece: usize,
+    ) -> Option<usize> {
+        if line_in_piece == 0 {
+            return Some(piece_start);
+        }
+        let line_starts = self.get_line_starts()?;
+        let start_idx = line_starts.partition_point(|&ls| ls <= piece_start);
+        let target_idx = start_idx + line_in_piece - 1;
+        let &ls = line_starts.get(target_idx)?;
+        if ls < piece_end {
+            Some(ls)
+        } else {
+            None
+        }
+    }
+
     /// Get line starts if available
     pub fn get_line_starts(&self) -> Option<&[usize]> {
         match &self.data {
@@ -579,46 +603,17 @@ impl PieceTreeNode {
                 // Get the buffer for this piece
                 let buffer_id = location.buffer_id();
                 let buffer = buffers.get(buffer_id)?;
-                let line_starts = buffer.get_line_starts()?;
 
                 // Find the line within the piece
                 let line_in_piece = target_line - lines_before;
-
-                // Get piece range in buffer
-                let piece_start_in_buffer = *offset;
-                let piece_end_in_buffer = offset + bytes;
-
-                // Special case: first line of piece (line_in_piece == 0)
-                let line_start_in_buffer = if line_in_piece == 0 {
-                    // First line starts at piece start
-                    piece_start_in_buffer
-                } else {
-                    // Find the Nth newline within this piece
-                    // Count line_starts that fall within [piece_start, piece_end)
-                    let mut lines_seen = 0;
-                    let mut found_line_start = None;
-
-                    for &line_start in line_starts.iter() {
-                        // Line starts are positions of newlines + 1, or beginning of buffer (0)
-                        // We want line_starts that are > piece_start and < piece_end
-                        if line_start > piece_start_in_buffer && line_start < piece_end_in_buffer {
-                            if lines_seen == line_in_piece - 1 {
-                                // This is the start of our target line
-                                found_line_start = Some(line_start);
-                                break;
-                            }
-                            lines_seen += 1;
-                        }
-                    }
-
-                    found_line_start?
-                };
+                let line_start_in_buffer =
+                    buffer.nth_line_start_in_piece(*offset, offset + bytes, line_in_piece)?;
 
                 // Add column offset
                 let target_offset_in_buffer = line_start_in_buffer + column;
 
                 // Convert to document offset
-                let offset_in_piece = target_offset_in_buffer.saturating_sub(piece_start_in_buffer);
+                let offset_in_piece = target_offset_in_buffer.saturating_sub(*offset);
                 Some(current_offset + offset_in_piece.min(*bytes))
             }
         }
@@ -939,27 +934,9 @@ impl PieceTree {
                         let line_in_piece = target_line - lines_before;
 
                         // Find the line start within the piece
-                        let line_start_in_buffer = if line_in_piece == 0 {
-                            *offset
-                        } else {
-                            // Find the Nth newline within this piece
-                            let mut lines_seen = 0;
-                            let mut found_line_start = *offset;
-
-                            if let Some(line_starts) = buffer.get_line_starts() {
-                                for &ls in line_starts.iter() {
-                                    if ls > *offset && ls < *offset + *bytes {
-                                        if lines_seen == line_in_piece - 1 {
-                                            found_line_start = ls;
-                                            break;
-                                        }
-                                        lines_seen += 1;
-                                    }
-                                }
-                            }
-
-                            found_line_start
-                        };
+                        let line_start_in_buffer = buffer
+                            .nth_line_start_in_piece(*offset, *offset + *bytes, line_in_piece)
+                            .unwrap_or(*offset);
 
                         // Calculate split offset within the piece
                         let column_offset = target_column.min(*bytes);
@@ -1461,27 +1438,9 @@ impl PieceTree {
         let line_in_piece = target_line - lines_before;
 
         // Find the line start within the piece
-        let line_start_in_buffer = if line_in_piece == 0 {
-            piece_offset
-        } else {
-            // Find the Nth newline within this piece
-            let mut lines_seen = 0;
-            let mut found_line_start = piece_offset;
-
-            if let Some(line_starts) = buffer.get_line_starts() {
-                for &ls in line_starts.iter() {
-                    if ls > piece_offset && ls < piece_offset + piece_bytes {
-                        if lines_seen == line_in_piece - 1 {
-                            found_line_start = ls;
-                            break;
-                        }
-                        lines_seen += 1;
-                    }
-                }
-            }
-
-            found_line_start
-        };
+        let line_start_in_buffer = buffer
+            .nth_line_start_in_piece(piece_offset, piece_offset + piece_bytes, line_in_piece)
+            .unwrap_or(piece_offset);
 
         // Calculate offset within the piece
         let column_offset = target_column.min(piece_bytes);
@@ -1668,18 +1627,13 @@ impl PieceTree {
                         offset.saturating_sub(line_start)
                     } else {
                         // Line starts within this piece
-                        // Find where the line starts within the piece
-                        let mut count = 0;
-                        let mut line_start_in_buf = piece_info.offset;
-                        for &ls in line_starts.iter() {
-                            if ls > piece_info.offset && ls < piece_info.offset + piece_info.bytes {
-                                count += 1;
-                                if count == line_in_piece {
-                                    line_start_in_buf = ls;
-                                    break;
-                                }
-                            }
-                        }
+                        let line_start_in_buf = buffer
+                            .nth_line_start_in_piece(
+                                piece_info.offset,
+                                piece_info.offset + piece_info.bytes,
+                                line_in_piece,
+                            )
+                            .unwrap_or(piece_info.offset);
                         let line_start_offset_in_piece = line_start_in_buf - piece_info.offset;
                         offset_in_piece - line_start_offset_in_piece
                     };
