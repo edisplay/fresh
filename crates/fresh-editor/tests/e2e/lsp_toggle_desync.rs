@@ -1,15 +1,11 @@
-//! E2E tests for LSP toggle desync bug (GitHub issue #952)
+//! E2E tests for LSP toggle desync fix (GitHub issue #952)
 //!
 //! When LSP is toggled off and back on, the editor must re-send didOpen
-//! with the current buffer content. If it doesn't (because the async handler
-//! skips the didOpen since the document is still tracked in document_versions),
-//! the server's view of the document becomes stale. Subsequent didChange
-//! messages will have invalid ranges relative to the server's stale content,
-//! causing TypeScript Server errors like:
-//!   "TypeError: Cannot read properties of undefined (reading 'charCount')"
-//! in the encodedSemanticClassifications-full handler.
+//! with the current buffer content. The fix sends didClose when toggling
+//! off, which clears document_versions in the async handler so that the
+//! subsequent didOpen is accepted (not skipped by should_skip_did_open).
 //!
-//! Bug flow:
+//! Previous bug flow (before fix):
 //! 1. Open file -> didOpen sent, document_versions[path] = 0
 //! 2. Edit -> didChange sent, version incremented
 //! 3. Toggle LSP OFF -> lsp_opened_with cleared, but NO didClose sent
@@ -19,21 +15,10 @@
 //! 6. Edit -> didChange sent with ranges relative to current buffer,
 //!    but server has stale content from step 2. DESYNC!
 //!
-//! Reproduction confirmed in tmux with real typescript-language-server 5.1.3
-//! and TypeScript 5.9.3: after toggle off + add text + toggle on + delete
-//! the added text, the TSP crashes with:
-//!   "Semantic tokens range request failed: LSP error: <semantic>
-//!    TypeScript Server Error (5.9.3)
-//!    TypeError: Cannot read properties of undefined (reading 'charCount')"
-//!
-//! Note: The original issue #952 was initially reported as "any edit causes
-//! LSP to deactivate", but further investigation by the reporter (comment 6)
-//! narrowed the trigger to the toggle off/on flow. Normal editing without
-//! toggle does not cause the crash — confirmed via tmux testing with
-//! auto_start=true, manual start via LspRestart, and various editing
-//! patterns including typing, saving, and deleting.
+//! Fixed flow:
+//! 3. Toggle LSP OFF -> didClose sent, document_versions cleared
+//! 5. Toggle LSP ON -> didOpen accepted, server gets current content
 
-use crate::common::fake_lsp::FakeLspServer;
 use crate::common::harness::EditorTestHarness;
 use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -120,6 +105,12 @@ while true; do
         "textDocument/inlayHint")
             send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":[]}'
             ;;
+        "textDocument/completion")
+            send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":[]}'
+            ;;
+        "$/cancelRequest")
+            # Cancel requests are notifications - no response needed
+            ;;
         "shutdown")
             send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":null}'
             break
@@ -144,19 +135,13 @@ done
     script_path
 }
 
-/// Test that toggling LSP off, editing, and toggling back on causes a desync
-/// because didOpen is skipped on re-enable.
+/// Test that toggling LSP off, editing, and toggling back on properly
+/// resyncs the document via didClose + didOpen.
 ///
-/// This test demonstrates the root cause of issue #952:
-/// - The LSP async handler's `should_skip_did_open` returns true because
-///   `document_versions` still has the path from the first open
-/// - No `didClose` is sent when toggling LSP off, so the server still has
-///   the document open with stale content
-/// - When re-enabling, the editor inserts the handle_id into `lsp_opened_with`
-///   but the actual didOpen is never sent to the server
-///
-/// The test asserts the BUGGY behavior (only 1 didOpen). Once fixed, this
-/// test should be updated to assert 2 didOpen messages OR a didClose+didOpen pair.
+/// This test verifies the fix for issue #952:
+/// - When LSP is toggled off, didClose is sent to clear document_versions
+/// - When LSP is toggled back on, didOpen is accepted (not skipped)
+/// - The server receives the current buffer content after re-enable
 #[test]
 #[cfg_attr(target_os = "windows", ignore)] // Uses Bash-based fake LSP server
 fn test_lsp_toggle_off_edit_toggle_on_causes_desync() -> anyhow::Result<()> {
@@ -166,9 +151,6 @@ fn test_lsp_toggle_off_edit_toggle_on_causes_desync() -> anyhow::Result<()> {
 
     // Create the body-logging fake LSP server script
     let script_path = create_body_logging_lsp_script();
-
-    // Spawn a FakeLspServer instance (just for cleanup)
-    let _fake_server = FakeLspServer::spawn()?;
 
     // Create temp dir and test file
     let temp_dir = tempfile::tempdir()?;
@@ -231,7 +213,12 @@ fn test_lsp_toggle_off_edit_toggle_on_causes_desync() -> anyhow::Result<()> {
     // Step 3: Toggle LSP OFF (Alt+T)
     harness.send_key(KeyCode::Char('t'), KeyModifiers::ALT)?;
     harness.render()?;
-    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Wait for didClose to be sent to the LSP server
+    harness.wait_until(|_| {
+        let log = std::fs::read_to_string(&log_file).unwrap_or_default();
+        log.contains("METHOD:textDocument/didClose")
+    })?;
 
     // Step 4: Edit while LSP is disabled - type more text
     harness.type_text("XYZ")?;
@@ -241,64 +228,53 @@ fn test_lsp_toggle_off_edit_toggle_on_causes_desync() -> anyhow::Result<()> {
     harness.send_key(KeyCode::Char('t'), KeyModifiers::ALT)?;
     harness.render()?;
 
-    // Wait for toggle to take effect and messages to be sent
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    harness.process_async_and_render()?;
-
-    // Step 6: Type more text - this triggers didChange which will desync
-    harness.type_text("123")?;
-    harness.render()?;
-
-    // Wait for the new didChange to arrive
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    harness.process_async_and_render()?;
+    // Wait for second didOpen (re-sync after toggle)
+    harness.wait_until(|_| {
+        let log = std::fs::read_to_string(&log_file).unwrap_or_default();
+        log.matches("METHOD:textDocument/didOpen").count() >= 2
+    })?;
 
     // Read the final log and analyze
     let final_log = std::fs::read_to_string(&log_file).unwrap_or_default();
     eprintln!("[TEST] Final LSP log:\n{}", final_log);
 
     // Count didOpen messages
-    let did_open_count = final_log
-        .matches("METHOD:textDocument/didOpen")
-        .count();
+    let did_open_count = final_log.matches("METHOD:textDocument/didOpen").count();
 
-    // THE BUG: After toggle off + edit + toggle on, we need a SECOND didOpen
-    // to resync the document content. But should_skip_did_open returns true
-    // because document_versions still has the path from the first open.
-    //
-    // This assertion documents the BUGGY behavior.
-    // Once fixed, change this to assert_eq!(did_open_count, 2).
+    // After toggle off + edit + toggle on, a SECOND didOpen must be sent
+    // to resync the document content. The fix sends didClose on toggle-off
+    // so that document_versions is cleared and the subsequent didOpen is accepted.
     assert_eq!(
-        did_open_count, 1,
-        "BUG REPRODUCTION: Expected exactly 1 didOpen (the re-enable didOpen is missing). \
-         Got {}. If this fails with 2, the bug may be fixed!",
+        did_open_count, 2,
+        "Expected 2 didOpen messages (initial open + re-open after toggle). Got {}.",
         did_open_count
+    );
+
+    // Verify didClose was sent when toggling off
+    let did_close_count = final_log.matches("METHOD:textDocument/didClose").count();
+    assert_eq!(
+        did_close_count, 1,
+        "Expected 1 didClose message when toggling LSP off. Got {}.",
+        did_close_count
     );
 
     Ok(())
 }
 
-/// Test that toggling LSP off does NOT send didClose to the server.
+/// Test that toggling LSP off sends didClose to the server.
 ///
-/// This is the other half of the desync bug: when LSP is toggled off,
-/// the editor clears `lsp_opened_with` but does NOT send didClose to
-/// the server. This means `document_versions` in the async handler
-/// still has the path, causing `should_skip_did_open` to return true
-/// when the LSP is toggled back on.
-///
-/// The fix should either:
-/// - Send didClose when toggling off (so document_versions is cleared), OR
-/// - Clear document_versions for the path when toggling off, OR
-/// - Not skip didOpen when re-enabling (force re-open)
+/// When LSP is toggled off, the editor must send didClose so that the
+/// async handler's document_versions is cleared. This allows the
+/// subsequent didOpen (when LSP is toggled back on) to be accepted
+/// rather than skipped by should_skip_did_open.
 #[test]
 #[cfg_attr(target_os = "windows", ignore)] // Uses Bash-based fake LSP server
-fn test_lsp_toggle_off_does_not_send_did_close() -> anyhow::Result<()> {
+fn test_lsp_toggle_off_sends_did_close() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("fresh=debug")
         .try_init();
 
     let script_path = create_body_logging_lsp_script();
-    let _fake_server = FakeLspServer::spawn()?;
 
     let temp_dir = tempfile::tempdir()?;
     let log_file = temp_dir.path().join("lsp_toggle_close_log.txt");
@@ -346,23 +322,24 @@ fn test_lsp_toggle_off_does_not_send_did_close() -> anyhow::Result<()> {
     // Toggle LSP OFF
     harness.send_key(KeyCode::Char('t'), KeyModifiers::ALT)?;
     harness.render()?;
-    std::thread::sleep(std::time::Duration::from_millis(300));
-    harness.process_async_and_render()?;
+
+    // Wait for didClose to be sent to the LSP server
+    harness.wait_until(|_| {
+        let log = std::fs::read_to_string(&log_file).unwrap_or_default();
+        log.contains("METHOD:textDocument/didClose")
+    })?;
 
     let log = std::fs::read_to_string(&log_file).unwrap_or_default();
     eprintln!("[TEST] LSP log after toggle off:\n{}", log);
 
     let did_close_count = log.matches("METHOD:textDocument/didClose").count();
 
-    // THE BUG: No didClose is sent when toggling LSP off.
-    // This means document_versions still has the path, causing
-    // should_skip_did_open to block re-opening on toggle on.
-    //
-    // Once fixed, change this to assert_eq!(did_close_count, 1).
+    // didClose must be sent when toggling LSP off so that document_versions
+    // is cleared in the async handler. This allows the subsequent didOpen
+    // (when toggling back on) to be accepted.
     assert_eq!(
-        did_close_count, 0,
-        "BUG: Expected 0 didClose messages (toggle off doesn't send didClose). \
-         Got {}. If this fails with 1, the bug may be fixed!",
+        did_close_count, 1,
+        "Expected 1 didClose message when toggling LSP off. Got {}.",
         did_close_count
     );
 

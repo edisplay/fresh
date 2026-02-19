@@ -200,6 +200,45 @@ impl Editor {
 
     /// Disable LSP for a specific buffer and clear all LSP-related data
     fn disable_lsp_for_buffer(&mut self, buffer_id: crate::model::event::BufferId) {
+        // Send didClose to the LSP server so it removes the document from its
+        // tracking. This is critical: without didClose, the async handler's
+        // document_versions still has the path, and should_skip_did_open will
+        // block the didOpen when LSP is re-enabled — causing a desync where
+        // the server has stale content. (GitHub issue #952)
+        if let Some(uri) = self
+            .buffer_metadata
+            .get(&buffer_id)
+            .and_then(|m| m.file_uri())
+            .cloned()
+        {
+            let language = self
+                .buffers
+                .get(&buffer_id)
+                .map(|s| s.language.clone())
+                .unwrap_or_default();
+            if let Some(lsp) = self.lsp.as_mut() {
+                if let Some(handle) = lsp.get_handle_mut(&language) {
+                    tracing::info!(
+                        "Sending didClose for {} (language: {})",
+                        uri.as_str(),
+                        language
+                    );
+                    if let Err(e) = handle.did_close(uri) {
+                        tracing::warn!("Failed to send didClose to LSP: {}", e);
+                    }
+                } else {
+                    tracing::warn!(
+                        "disable_lsp_for_buffer: no handle for language '{}'",
+                        language
+                    );
+                }
+            } else {
+                tracing::warn!("disable_lsp_for_buffer: no LSP manager");
+            }
+        } else {
+            tracing::warn!("disable_lsp_for_buffer: no URI for buffer");
+        }
+
         // Disable LSP in metadata
         if let Some(metadata) = self.buffer_metadata.get_mut(&buffer_id) {
             metadata.disable_lsp(t!("lsp.disabled.user").to_string());

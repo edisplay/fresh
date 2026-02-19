@@ -18,13 +18,13 @@ use crate::services::async_bridge::{
 use crate::services::process_limits::ProcessLimits;
 use lsp_types::{
     notification::{
-        DidChangeTextDocument, DidOpenTextDocument, DidSaveTextDocument, Initialized, Notification,
-        PublishDiagnostics,
+        DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, DidSaveTextDocument,
+        Initialized, Notification, PublishDiagnostics,
     },
     request::{Initialize, Request},
-    ClientCapabilities, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, InitializeParams, InitializeResult, InitializedParams,
-    PublishDiagnosticsParams, SemanticTokenModifier, SemanticTokenType,
+    ClientCapabilities, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, InitializeParams, InitializeResult,
+    InitializedParams, PublishDiagnosticsParams, SemanticTokenModifier, SemanticTokenType,
     SemanticTokensClientCapabilities, SemanticTokensClientCapabilitiesRequests,
     SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensParams, SemanticTokensResult,
     SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentContentChangeEvent,
@@ -349,6 +349,9 @@ enum LspCommand {
         content_changes: Vec<TextDocumentContentChangeEvent>,
     },
 
+    /// Notify document closed
+    DidClose { uri: Uri },
+
     /// Notify document saved
     DidSave { uri: Uri, text: Option<String> },
 
@@ -538,6 +541,10 @@ impl LspState {
                     let _ = self
                         .handle_did_change_sequential(uri, content_changes, pending)
                         .await;
+                }
+                LspCommand::DidClose { uri } => {
+                    tracing::info!("Replaying DidClose for {}", uri.as_str());
+                    let _ = self.handle_did_close(uri).await;
                 }
                 LspCommand::DidSave { uri, text } => {
                     tracing::info!("Replaying DidSave for {}", uri.as_str());
@@ -879,6 +886,31 @@ impl LspState {
         };
 
         self.send_notification::<DidSaveTextDocument>(params).await
+    }
+
+    /// Handle did_close command
+    async fn handle_did_close(&mut self, uri: Uri) -> Result<(), String> {
+        let path = PathBuf::from(uri.path().as_str());
+
+        // Remove from document_versions so that a subsequent didOpen will be accepted
+        if self.document_versions.remove(&path).is_some() {
+            tracing::info!("LSP ({}): didClose for {}", self.language, uri.as_str());
+        } else {
+            tracing::debug!(
+                "LSP ({}): didClose for {} but document was not tracked",
+                self.language,
+                uri.as_str()
+            );
+        }
+
+        // Also remove from pending_opens
+        self.pending_opens.remove(&path);
+
+        let params = DidCloseTextDocumentParams {
+            text_document: TextDocumentIdentifier { uri },
+        };
+
+        self.send_notification::<DidCloseTextDocument>(params).await
     }
 
     /// Handle completion request
@@ -2241,6 +2273,18 @@ impl LspTask {
                                 });
                             }
                         }
+                        LspCommand::DidClose { uri } => {
+                            if state.initialized {
+                                tracing::info!("Processing DidClose for {}", uri.as_str());
+                                let _ = state.handle_did_close(uri).await;
+                            } else {
+                                tracing::trace!(
+                                    "Queueing DidClose for {} until initialization completes",
+                                    uri.as_str()
+                                );
+                                pending_commands.push(LspCommand::DidClose { uri });
+                            }
+                        }
                         LspCommand::DidSave { uri, text } => {
                             if state.initialized {
                                 tracing::info!("Processing DidSave for {}", uri.as_str());
@@ -3276,6 +3320,13 @@ impl LspHandle {
                 content_changes,
             })
             .map_err(|_| "Failed to send did_change command".to_string())
+    }
+
+    /// Send didClose notification
+    pub fn did_close(&self, uri: Uri) -> Result<(), String> {
+        self.command_tx
+            .try_send(LspCommand::DidClose { uri })
+            .map_err(|_| "Failed to send did_close command".to_string())
     }
 
     /// Send didSave notification
