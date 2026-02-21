@@ -529,3 +529,47 @@ fn test_folded_gutter_line_numbers_match_content_during_scroll() -> anyhow::Resu
 
     Ok(())
 }
+
+/// Unfold must work even when `folding_ranges` is empty (e.g. LSP disconnected
+/// or returned an empty response after ranges were previously available).
+///
+/// `toggle_fold_at_line` currently returns early when `folding_ranges.is_empty()`,
+/// which prevents expanding an already-collapsed fold.  This test folds a range
+/// while LSP ranges are present, then clears `folding_ranges` and attempts to
+/// unfold.
+#[test]
+fn test_unfold_works_after_folding_ranges_cleared() {
+    let mut harness = EditorTestHarness::new(80, 24).unwrap();
+
+    let content: String = (0..30).map(|i| format!("line {i}\n")).collect();
+    let fixture = TestFixture::new("fold_unfold_no_lsp.py", &content).unwrap();
+    harness.open_file(&fixture.path).unwrap();
+
+    // Set up a fold range and collapse it.
+    set_fold_range(&mut harness, 5, 10);
+    harness.render().unwrap();
+
+    let buffer_id = harness.editor().active_buffer();
+    harness.editor_mut().toggle_fold_at_line(buffer_id, 5);
+    harness.render().unwrap();
+
+    // Verify lines 6-10 are hidden.
+    harness.assert_screen_not_contains("line 6");
+    harness.assert_screen_not_contains("line 9");
+
+    // Simulate LSP disconnect: clear folding_ranges.
+    harness
+        .editor_mut()
+        .active_state_mut()
+        .folding_ranges
+        .clear();
+
+    // Attempt to unfold — the fold markers still exist in the FoldManager.
+    let buffer_id = harness.editor().active_buffer();
+    harness.editor_mut().toggle_fold_at_line(buffer_id, 5);
+    harness.render().unwrap();
+
+    // The fold should have been expanded: hidden lines should be visible again.
+    harness.assert_screen_contains("line 6");
+    harness.assert_screen_contains("line 9");
+}

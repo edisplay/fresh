@@ -218,14 +218,23 @@ impl Editor {
             return;
         };
 
-        if state.folding_ranges.is_empty() {
-            return;
-        }
-
         let Some(view_state) = split_view_states.get_mut(&split_id) else {
             return;
         };
         let buf_state = view_state.ensure_buffer_state(buffer_id);
+
+        // Try to unfold first — this only needs the marker-based FoldManager,
+        // not the LSP folding_ranges, so it works even after LSP disconnect.
+        if buf_state
+            .folds
+            .remove_by_header_line(&state.buffer, &mut state.marker_list, line)
+        {
+            return;
+        }
+
+        if state.folding_ranges.is_empty() {
+            return;
+        }
 
         let mut selected_range: Option<&lsp_types::FoldingRange> = None;
         let mut selected_span = usize::MAX;
@@ -249,13 +258,6 @@ impl Editor {
         let Some(range) = selected_range else {
             return;
         };
-
-        if buf_state
-            .folds
-            .remove_by_header_line(&state.buffer, &mut state.marker_list, line)
-        {
-            return;
-        }
 
         let start_line = line.saturating_add(1);
         let end_line = range.end_line as usize;
