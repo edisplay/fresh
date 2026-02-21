@@ -81,6 +81,17 @@ impl Viewport {
         }
     }
 
+    /// If `pos` falls inside a hidden fold range, return that range.
+    fn containing_hidden_range(
+        hidden_ranges: &[(usize, usize)],
+        pos: usize,
+    ) -> Option<(usize, usize)> {
+        hidden_ranges
+            .iter()
+            .find(|&&(start, end)| pos >= start && pos < end)
+            .copied()
+    }
+
     /// Mark viewport to skip sync on next resize (used after session restore)
     pub fn set_skip_resize_sync(&mut self) {
         self.skip_resize_sync = true;
@@ -901,14 +912,26 @@ impl Viewport {
     /// This should be called before rendering to batch multiple cursor movements
     pub fn sync_with_cursor(&mut self, buffer: &mut Buffer, cursor: &Cursor) {
         if self.needs_sync {
-            self.ensure_visible(buffer, cursor);
+            self.ensure_visible(buffer, cursor, &[]);
             self.needs_sync = false;
         }
     }
 
-    /// Ensure a cursor is visible, scrolling if necessary (smart scroll)
-    /// Now works entirely with byte offsets - no line number calculations needed!
-    pub fn ensure_visible(&mut self, buffer: &mut Buffer, cursor: &Cursor) {
+    /// Low-level: ensure cursor is visible, scrolling if necessary.
+    ///
+    /// Callers should prefer [`BufferViewState::ensure_cursor_visible`] which
+    /// automatically resolves fold ranges from the marker list. Use this
+    /// directly only from the rendering pipeline where fold ranges are already
+    /// resolved, or from unit tests (pass `&[]` for `hidden_ranges`).
+    ///
+    /// `hidden_ranges` contains `(start_byte, end_byte)` pairs for collapsed
+    /// fold regions so that line counting skips hidden lines.
+    pub(crate) fn ensure_visible(
+        &mut self,
+        buffer: &mut Buffer,
+        cursor: &Cursor,
+        hidden_ranges: &[(usize, usize)],
+    ) {
         // Check if we should skip sync due to session restore
         // This prevents the restored scroll position from being overwritten
         if self.should_skip_resize_sync() {
@@ -1027,6 +1050,20 @@ impl Viewport {
                     }
                 }
 
+                // Skip entire hidden fold region at once
+                if let Some((_start, end)) =
+                    Self::containing_hidden_range(hidden_ranges, current_pos)
+                {
+                    while iter.current_position() < end
+                        && iter.current_position() < cursor_line_start
+                    {
+                        if iter.next_line().is_none() {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+
                 // Get the next line
                 if let Some((_line_start, line_content)) = iter.next_line() {
                     // Wrap this line to count how many visual rows it takes
@@ -1044,11 +1081,23 @@ impl Viewport {
                 }
             }
         } else {
-            // Without line wrapping: count logical lines as before
+            // Without line wrapping: count visible (non-hidden) logical lines
             let mut iter = buffer.line_iterator(self.top_byte, 80);
             let mut lines_from_top = 0;
 
             while iter.current_position() < cursor_line_start && lines_from_top < viewport_lines {
+                let pos = iter.current_position();
+                // Skip entire hidden fold region at once
+                if let Some((_start, end)) = Self::containing_hidden_range(hidden_ranges, pos) {
+                    while iter.current_position() < end
+                        && iter.current_position() < cursor_line_start
+                    {
+                        if iter.next_line().is_none() {
+                            break;
+                        }
+                    }
+                    continue;
+                }
                 if iter.next_line().is_none() {
                     break;
                 }
@@ -1118,12 +1167,24 @@ impl Viewport {
                 }
 
                 // Now move backwards counting visual rows until we reach target.
-                // Use the content returned by prev() directly instead of calling
-                // next_line() (which can be confused by the pending_trailing_empty_line
-                // flag when the cursor is at EOF after a trailing newline).
                 iter = buffer.line_iterator(cursor_line_start, 80);
                 while visual_rows_counted < target_visual_rows {
-                    if let Some((_line_start, line_content)) = iter.prev() {
+                    if iter.prev().is_none() {
+                        break; // Hit beginning of buffer
+                    }
+                    // Skip hidden fold regions backward (handles adjacent folds).
+                    while let Some((start, _end)) =
+                        Self::containing_hidden_range(hidden_ranges, iter.current_position())
+                    {
+                        while iter.current_position() >= start {
+                            if iter.prev().is_none() {
+                                break;
+                            }
+                        }
+                    }
+                    // Read the visible line's content to count wrapped rows,
+                    // then rewind so the next prev() moves to the line before.
+                    if let Some((_ls, line_content)) = iter.next_line() {
                         let line_text = if line_content.ends_with('\n') {
                             &line_content[..line_content.len() - 1]
                         } else {
@@ -1131,8 +1192,7 @@ impl Viewport {
                         };
                         let segments = wrap_line(line_text, &wrap_config);
                         visual_rows_counted += segments.len();
-                    } else {
-                        break; // Hit beginning of buffer
+                        iter.prev();
                     }
                 }
 
@@ -1140,7 +1200,7 @@ impl Viewport {
                 self.set_top_byte_with_limit(buffer, new_top_byte);
                 self.top_view_line_offset = 0;
             } else {
-                // Non-wrapped mode: each prev() moves back one logical line
+                // Non-wrapped mode: count only visible lines when scanning backward
                 let target_rows_from_top = if cursor_near_top {
                     effective_offset
                 } else {
@@ -1148,11 +1208,25 @@ impl Viewport {
                 };
 
                 let mut iter = buffer.line_iterator(cursor_line_start, 80);
+                let mut visible_counted = 0;
 
-                for _ in 0..target_rows_from_top {
+                while visible_counted < target_rows_from_top {
                     if iter.prev().is_none() {
                         break; // Hit beginning of buffer
                     }
+                    // Skip entire hidden fold region backward, then
+                    // handle adjacent/nested folds with a loop.
+                    while let Some((start, _end)) =
+                        Self::containing_hidden_range(hidden_ranges, iter.current_position())
+                    {
+                        while iter.current_position() >= start {
+                            if iter.prev().is_none() {
+                                break;
+                            }
+                        }
+                    }
+                    // After any skips we're on a visible line — count it.
+                    visible_counted += 1;
                 }
 
                 let new_top_byte = iter.current_position();
@@ -1352,7 +1426,7 @@ impl Viewport {
         } else {
             // Can't fit all cursors, ensure primary is visible
             let primary_cursor = sorted_cursors[0].1;
-            self.ensure_visible(buffer, primary_cursor);
+            self.ensure_visible(buffer, primary_cursor, &[]);
         }
     }
 
@@ -1497,7 +1571,7 @@ mod tests {
         }
 
         let cursor = Cursor::new(cursor_pos);
-        vp.ensure_visible(&mut buffer, &cursor);
+        vp.ensure_visible(&mut buffer, &cursor, &[]);
 
         // Verify cursor is now visible by checking we scrolled appropriately
         assert!(vp.top_byte > 0);
@@ -1547,7 +1621,7 @@ mod tests {
         let cursor = Cursor::new(line_5_byte);
 
         // Before fix, this should fail because ensure_visible doesn't detect cursor is above viewport
-        vp.ensure_visible(&mut buffer, &cursor);
+        vp.ensure_visible(&mut buffer, &cursor, &[]);
 
         // Verify that viewport scrolled up to make cursor visible
         // The viewport should now be positioned so cursor (line 5) is visible
@@ -1603,7 +1677,7 @@ mod tests {
         }
         let cursor = Cursor::new(line_15_byte);
 
-        vp.ensure_visible(&mut buffer, &cursor);
+        vp.ensure_visible(&mut buffer, &cursor, &[]);
 
         // Verify cursor is placed near the bottom scroll margin (not centered)
         // With minimal scroll, cursor below viewport is placed at (viewport - scroll_offset) from top
@@ -1632,7 +1706,7 @@ mod tests {
 
         // First, scroll right by moving cursor to end of line
         let cursor_at_end = Cursor::new(100);
-        vp.ensure_visible(&mut buffer, &cursor_at_end);
+        vp.ensure_visible(&mut buffer, &cursor_at_end, &[]);
 
         println!("After moving to position 100:");
         println!("  left_column = {}", vp.left_column);

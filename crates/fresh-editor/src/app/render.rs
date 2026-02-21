@@ -2493,11 +2493,8 @@ impl Editor {
                 view_state.cursors.primary_mut().position = match_pos;
                 view_state.cursors.primary_mut().anchor = None;
                 // Ensure cursor is visible
-                let cursor = *view_state.cursors.primary();
                 let state = self.buffers.get_mut(&active_buffer).unwrap();
-                view_state
-                    .viewport
-                    .ensure_visible(&mut state.buffer, &cursor);
+                view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
             }
         }
 
@@ -2593,11 +2590,8 @@ impl Editor {
                     view_state.cursors.primary_mut().position = match_pos;
                     view_state.cursors.primary_mut().anchor = None;
                     // Ensure cursor is visible
-                    let cursor = *view_state.cursors.primary();
                     let state = self.buffers.get_mut(&active_buffer).unwrap();
-                    view_state
-                        .viewport
-                        .ensure_visible(&mut state.buffer, &cursor);
+                    view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
                 }
             }
 
@@ -2659,11 +2653,8 @@ impl Editor {
                     view_state.cursors.primary_mut().position = match_pos;
                     view_state.cursors.primary_mut().anchor = None;
                     // Ensure cursor is visible
-                    let cursor = *view_state.cursors.primary();
                     let state = self.buffers.get_mut(&active_buffer).unwrap();
-                    view_state
-                        .viewport
-                        .ensure_visible(&mut state.buffer, &cursor);
+                    view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
                 }
             }
 
@@ -3062,11 +3053,8 @@ impl Editor {
             view_state.cursors.primary_mut().position = first_match_pos;
             view_state.cursors.primary_mut().anchor = None;
             // Ensure cursor is visible
-            let cursor = *view_state.cursors.primary();
             let state = self.buffers.get_mut(&active_buffer).unwrap();
-            view_state
-                .viewport
-                .ensure_visible(&mut state.buffer, &cursor);
+            view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
         }
 
         // Show the query-replace prompt
@@ -3378,11 +3366,8 @@ impl Editor {
             view_state.cursors.primary_mut().position = match_pos;
             view_state.cursors.primary_mut().anchor = None;
             // Ensure cursor is visible
-            let cursor = *view_state.cursors.primary();
             let state = self.buffers.get_mut(&active_buffer).unwrap();
-            view_state
-                .viewport
-                .ensure_visible(&mut state.buffer, &cursor);
+            view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
         }
 
         // Update the prompt message (show [Wrapped] if we've wrapped around)
@@ -4726,12 +4711,9 @@ impl Editor {
             // Get the active split's buffer and update its viewport
             if let Some(buffer_id) = self.split_manager.buffer_for_split(active_split) {
                 if let Some(state) = self.buffers.get_mut(&buffer_id) {
-                    let buffer = &mut state.buffer;
-
                     if let Some(view_state) = self.split_view_states.get_mut(&active_split) {
-                        let cursor = *view_state.cursors.primary();
-                        // Update viewport to show cursor - this is what ensure_visible does
-                        view_state.viewport.ensure_visible(buffer, &cursor);
+                        // Update viewport to show cursor
+                        view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
 
                         tracing::debug!(
                             "pre_sync_ensure_visible: updated active split {:?} viewport, top_byte={}",

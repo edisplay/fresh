@@ -600,10 +600,7 @@ impl Editor {
                     // Set cursor position in the split's view state
                     view_state.cursors.primary_mut().move_to(position, false);
                     // Ensure the cursor is visible by scrolling the split's viewport
-                    let cursor = *view_state.cursors.primary();
-                    view_state
-                        .viewport
-                        .ensure_visible(&mut state.buffer, &cursor);
+                    view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
                     tracing::debug!(
                         "SetBufferCursor: updated split {:?} (active={}) viewport top_byte={}",
                         leaf_id,
@@ -866,11 +863,8 @@ impl Editor {
         let active_split = self.split_manager.active_split();
         let active_buffer = self.active_buffer();
         if let Some(view_state) = self.split_view_states.get_mut(&active_split) {
-            let cursor = *view_state.cursors.primary();
             let state = self.buffers.get_mut(&active_buffer).unwrap();
-            view_state
-                .viewport
-                .ensure_visible(&mut state.buffer, &cursor);
+            view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
         }
     }
 

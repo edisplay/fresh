@@ -573,3 +573,149 @@ fn test_unfold_works_after_folding_ranges_cleared() {
     harness.assert_screen_contains("line 6");
     harness.assert_screen_contains("line 9");
 }
+
+/// Scrolling should trigger at the same cursor-to-edge distance with and
+/// without folded code.  The viewport's `scroll_offset` (default 3) keeps
+/// the cursor at least 3 visible lines from the top/bottom edge.
+///
+/// This test places a fold *inside* the viewport so the cursor actually
+/// traverses through/across it while scrolling.  We build two equivalent
+/// scenarios:
+///
+///   - "plain": 60 contiguous visible lines (lines 0..59).
+///   - "folded": 70 source lines with lines 11-20 folded away, leaving the
+///     same 60 visible lines.
+///
+/// Starting from the top and pressing Down repeatedly, every step should
+/// produce identical (cursor_screen_row, viewport_top_visible_line) pairs.
+/// Same for scrolling back up.
+#[test]
+fn test_scroll_margin_identical_with_and_without_fold() {
+    /// Record (cursor_screen_row_in_content, top_visible_line) after each
+    /// Down / Up key press.
+    fn collect_scroll_trace(
+        harness: &mut EditorTestHarness,
+        steps_down: usize,
+        steps_up: usize,
+    ) -> (Vec<(usize, usize)>, Vec<(usize, usize)>) {
+        let mut down = Vec::new();
+        let mut up = Vec::new();
+        let (start_row, _) = harness.content_area_rows();
+
+        for _ in 0..steps_down {
+            harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+            let (_, cy) = harness.screen_cursor_position();
+            down.push((
+                (cy as usize).saturating_sub(start_row),
+                harness.top_line_number(),
+            ));
+        }
+        for _ in 0..steps_up {
+            harness.send_key(KeyCode::Up, KeyModifiers::NONE).unwrap();
+            let (_, cy) = harness.screen_cursor_position();
+            up.push((
+                (cy as usize).saturating_sub(start_row),
+                harness.top_line_number(),
+            ));
+        }
+        (down, up)
+    }
+
+    // visible_lines is the number of visible lines the user can see in both
+    // scenarios.  In the "plain" file these are source lines 0..59.
+    // In the "folded" file lines 11..20 are hidden, so visible lines map to
+    // source lines 0..10, 21..69  (same count: 60).
+    let visible_lines = 60usize;
+    let fold_header = 10usize; // header line (stays visible)
+    let fold_end = 20usize; // last hidden line
+    let hidden = fold_end - fold_header; // 10 lines hidden
+
+    let steps = visible_lines; // scroll the full visible range
+
+    // --- Plain file: 60 lines, no folds ---
+    let plain_content: String = (0..visible_lines).map(|i| format!("line {i}\n")).collect();
+    let mut harness_plain = EditorTestHarness::new(80, 24).unwrap();
+    let fixture_plain = TestFixture::new("scroll_plain.py", &plain_content).unwrap();
+    harness_plain.open_file(&fixture_plain.path).unwrap();
+    harness_plain.render().unwrap();
+    let (down_plain, up_plain) = collect_scroll_trace(&mut harness_plain, steps, steps);
+
+    // --- Folded file: 70 source lines, lines 11..20 hidden ---
+    // The visible content is identical to the plain file:
+    //   source  0..10  →  visible 0..10   ("line 0" .. "line 10")
+    //   source 11..20  →  (hidden by fold)
+    //   source 21..69  →  visible 11..59  ("line 11" .. "line 59")
+    // So we label source lines to match: source N shows "line N" if
+    // visible, ensuring the rendered text is the same.
+    let folded_total = visible_lines + hidden; // 70 source lines
+    let folded_content: String = (0..folded_total)
+        .map(|src| {
+            // Map source line to visible line number for the label.
+            let vis = if src <= fold_header {
+                src
+            } else if src <= fold_end {
+                // hidden lines — label doesn't matter, they won't render
+                src
+            } else {
+                src - hidden
+            };
+            format!("line {vis}\n")
+        })
+        .collect();
+
+    let mut harness_folded = EditorTestHarness::new(80, 24).unwrap();
+    let fixture_folded = TestFixture::new("scroll_folded.py", &folded_content).unwrap();
+    harness_folded.open_file(&fixture_folded.path).unwrap();
+
+    set_fold_range(&mut harness_folded, fold_header, fold_end);
+    harness_folded.render().unwrap();
+    let buffer_id = harness_folded.editor().active_buffer();
+    harness_folded
+        .editor_mut()
+        .toggle_fold_at_line(buffer_id, fold_header);
+    harness_folded.render().unwrap();
+
+    // Sanity: hidden lines must not be on screen, first post-fold line must be.
+    harness_folded.assert_screen_not_contains("line 11\n");
+    harness_folded.assert_screen_contains("line 10");
+
+    let (down_folded, up_folded) = collect_scroll_trace(&mut harness_folded, steps, steps);
+
+    // --- Compare: cursor screen row must match at every step ---
+    // We only compare the cursor's screen row (index 0 of the tuple),
+    // not the top_line_number, because the fold changes source line
+    // numbering.  The key invariant is that the cursor stays at the
+    // same distance from the viewport edges.
+    //
+    // Collect all mismatches before asserting so we can see the full
+    // picture for both directions.
+    let mut failures = Vec::new();
+
+    for (i, (plain, folded)) in down_plain.iter().zip(down_folded.iter()).enumerate() {
+        if plain.0 != folded.0 {
+            failures.push(format!(
+                "Down step {i}: cursor screen row differs.\n\
+                 Without fold: row={}, top_line={}\n\
+                 With fold:    row={}, top_line={}",
+                plain.0, plain.1, folded.0, folded.1,
+            ));
+        }
+    }
+    for (i, (plain, folded)) in up_plain.iter().zip(up_folded.iter()).enumerate() {
+        if plain.0 != folded.0 {
+            failures.push(format!(
+                "Up step {i}: cursor screen row differs.\n\
+                 Without fold: row={}, top_line={}\n\
+                 With fold:    row={}, top_line={}",
+                plain.0, plain.1, folded.0, folded.1,
+            ));
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "Scroll margin mismatches ({} total):\n{}",
+        failures.len(),
+        failures.join("\n"),
+    );
+}

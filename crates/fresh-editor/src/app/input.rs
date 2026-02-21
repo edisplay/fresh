@@ -764,10 +764,7 @@ impl Editor {
                     let active_buffer = self.active_buffer();
                     if let Some(view_state) = self.split_view_states.get_mut(&active_split) {
                         let state = self.buffers.get_mut(&active_buffer).unwrap();
-                        let primary = *view_state.cursors.primary();
-                        view_state
-                            .viewport
-                            .ensure_visible(&mut state.buffer, &primary);
+                        view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
                     }
                 }
             }

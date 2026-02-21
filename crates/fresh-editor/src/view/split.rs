@@ -23,8 +23,10 @@
 /// └────────────────────┘      └──────────┴─────────┘
 ///  (horizontal split)          (mixed splits)
 /// ```
+use crate::model::buffer::Buffer;
 use crate::model::cursor::Cursors;
 use crate::model::event::{BufferId, ContainerId, LeafId, SplitDirection, SplitId};
+use crate::model::marker::MarkerList;
 use crate::view::folding::FoldManager;
 use crate::view::ui::view_pipeline::Layout;
 use crate::view::viewport::Viewport;
@@ -109,6 +111,22 @@ pub struct BufferViewState {
 }
 
 impl BufferViewState {
+    /// Resolve fold ranges and ensure the primary cursor is visible.
+    ///
+    /// This is the preferred entry point for all non-rendering callers — it
+    /// resolves hidden fold byte ranges from the marker list and passes them
+    /// to `viewport.ensure_visible` so that line counting skips folded lines.
+    pub fn ensure_cursor_visible(&mut self, buffer: &mut Buffer, marker_list: &MarkerList) {
+        let hidden: Vec<(usize, usize)> = self
+            .folds
+            .resolved_ranges(buffer, marker_list)
+            .into_iter()
+            .map(|r| (r.start_byte, r.end_byte))
+            .collect();
+        let cursor = *self.cursors.primary();
+        self.viewport.ensure_visible(buffer, &cursor, &hidden);
+    }
+
     /// Create a new buffer view state with defaults
     pub fn new(width: u16, height: u16) -> Self {
         Self {

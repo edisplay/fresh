@@ -566,10 +566,7 @@ impl Editor {
 
                 // Scroll viewport to make cursor visible at the end of buffer
                 if let Some(state) = self.buffers.get_mut(&buffer_id) {
-                    let cursor = *view_state.cursors.primary();
-                    view_state
-                        .viewport
-                        .ensure_visible(&mut state.buffer, &cursor);
+                    view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
                 }
             }
         }

@@ -1043,11 +1043,26 @@ impl SplitRenderer {
                     .and_then(|vs| vs.get(&split_id))
                     .map(|vs| vs.cursors.clone())
                     .unwrap_or_else(crate::model::cursor::Cursors::new);
+                // Resolve hidden fold byte ranges so ensure_visible can skip
+                // folded lines when counting distance to the cursor.
+                let hidden_ranges: Vec<(usize, usize)> = split_view_states
+                    .as_deref()
+                    .and_then(|vs| vs.get(&split_id))
+                    .map(|vs| {
+                        vs.folds
+                            .resolved_ranges(&state.buffer, &state.marker_list)
+                            .into_iter()
+                            .map(|r| (r.start_byte, r.end_byte))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
                 Self::sync_viewport_to_content(
                     &mut viewport,
                     &mut state.buffer,
                     &split_cursors,
                     layout.content_rect,
+                    &hidden_ranges,
                 );
                 let view_prefs =
                     Self::resolve_view_preferences(state, split_view_states.as_deref(), split_id);
@@ -1262,11 +1277,25 @@ impl SplitRenderer {
                 .get(&split_id)
                 .map(|vs| vs.cursors.clone())
                 .unwrap_or_else(crate::model::cursor::Cursors::new);
+            // Resolve hidden fold byte ranges so ensure_visible can skip
+            // folded lines when counting distance to the cursor.
+            let hidden_ranges: Vec<(usize, usize)> = split_view_states
+                .get(&split_id)
+                .map(|vs| {
+                    vs.folds
+                        .resolved_ranges(&state.buffer, &state.marker_list)
+                        .into_iter()
+                        .map(|r| (r.start_byte, r.end_byte))
+                        .collect()
+                })
+                .unwrap_or_default();
+
             Self::sync_viewport_to_content(
                 &mut viewport,
                 &mut state.buffer,
                 &split_cursors,
                 layout.content_rect,
+                &hidden_ranges,
             );
             let view_prefs =
                 Self::resolve_view_preferences(state, Some(&*split_view_states), split_id);
@@ -2051,6 +2080,7 @@ impl SplitRenderer {
         buffer: &mut crate::model::buffer::Buffer,
         cursors: &crate::model::cursor::Cursors,
         content_rect: Rect,
+        hidden_ranges: &[(usize, usize)],
     ) {
         let size_changed =
             viewport.width != content_rect.width || viewport.height != content_rect.height;
@@ -2064,7 +2094,7 @@ impl SplitRenderer {
         // so this is safe to call unconditionally. Previously needs_sync was set by
         // EditorState.apply() but now viewport is owned by SplitViewState.
         let primary = *cursors.primary();
-        viewport.ensure_visible(buffer, &primary);
+        viewport.ensure_visible(buffer, &primary, hidden_ranges);
     }
 
     fn resolve_view_preferences(
