@@ -703,11 +703,15 @@ globalThis.devcontainer_on_action_result = function (
     }
   } else if (data.popup_id === "devcontainer-activate") {
     switch (data.action_id) {
+      case "rebuild":
+        globalThis.devcontainer_rebuild();
+        break;
+      case "copy_install":
+        editor.setClipboard(INSTALL_COMMAND);
+        editor.setStatus(editor.t("status.copied_install", { cmd: INSTALL_COMMAND }));
+        break;
       case "show_info":
         globalThis.devcontainer_show_info();
-        break;
-      case "open_config":
-        globalThis.devcontainer_open_config();
         break;
       case "dismiss":
       case "dismissed":
@@ -806,15 +810,28 @@ if (findConfig()) {
   );
 
   // Show activation popup on startup
-  editor.showActionPopup({
-    id: "devcontainer-activate",
-    title: editor.t("popup.activate_title"),
-    message: editor.t("popup.activate_message", { name, image }),
-    actions: [
-      { id: "show_info", label: editor.t("popup.activate_show_info") },
-      { id: "open_config", label: editor.t("popup.activate_open_config") },
-      { id: "dismiss", label: "Dismiss (ESC)" },
-    ],
+  // Check if devcontainer CLI is available to decide which actions to offer
+  const cliCheck = editor.spawnProcess("which", ["devcontainer"]);
+  cliCheck.then((result) => {
+    const hasCli = result.exit_code === 0;
+    const actions: Array<{ id: string; label: string }> = [];
+
+    if (hasCli) {
+      actions.push({ id: "rebuild", label: editor.t("popup.activate_rebuild") });
+    } else {
+      actions.push({ id: "copy_install", label: "Copy: " + INSTALL_COMMAND });
+    }
+    actions.push({ id: "show_info", label: editor.t("popup.activate_show_info") });
+    actions.push({ id: "dismiss", label: "Dismiss (ESC)" });
+
+    editor.showActionPopup({
+      id: "devcontainer-activate",
+      title: editor.t("popup.activate_title"),
+      message: hasCli
+        ? editor.t("popup.activate_message", { name, image })
+        : editor.t("popup.activate_message_no_cli", { name, image }),
+      actions,
+    });
   });
 
   editor.debug("Dev Container plugin initialized: " + name);
