@@ -1341,9 +1341,9 @@ editor.debug("Bundle test plugin 2 loaded!");
         .unwrap();
     harness.wait_for_prompt().unwrap();
 
-    harness.type_text("Theme").unwrap();
+    harness.type_text("Select Theme").unwrap();
     harness
-        .wait_until(|h| h.screen_to_string().contains("Theme"))
+        .wait_until(|h| h.screen_to_string().contains("Select Theme"))
         .unwrap();
 
     harness
