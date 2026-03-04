@@ -350,7 +350,7 @@ impl Editor {
 
         let width = POPUP_WIDTH;
         let height = line_count + 2; // +2 for borders
-        // The button is on the last content row (before bottom border)
+                                     // The button is on the last content row (before bottom border)
         let button_row_offset = line_count; // 0-indexed from popup y + 1 (top border)
 
         // Use the same screen-aware positioning as render to match the actual drawn rect
@@ -366,7 +366,13 @@ impl Editor {
 const POPUP_WIDTH: u16 = 40;
 
 /// Compute the final popup rect, flipping near screen edges.
-fn compute_popup_rect(position: (u16, u16), width: u16, height: u16, screen_w: u16, screen_h: u16) -> Rect {
+fn compute_popup_rect(
+    position: (u16, u16),
+    width: u16,
+    height: u16,
+    screen_w: u16,
+    screen_h: u16,
+) -> Rect {
     let x = if position.0 + width > screen_w {
         screen_w.saturating_sub(width)
     } else {

@@ -906,7 +906,10 @@ impl LspState {
             },
         };
 
-        self.document_versions.lock().unwrap().insert(path.clone(), 0);
+        self.document_versions
+            .lock()
+            .unwrap()
+            .insert(path.clone(), 0);
 
         // Record when we sent didOpen so didChange can wait if needed
         self.pending_opens.insert(path, Instant::now());
@@ -991,7 +994,13 @@ impl LspState {
         let path = PathBuf::from(uri.path().as_str());
 
         // Remove from document_versions so that a subsequent didOpen will be accepted
-        if self.document_versions.lock().unwrap().remove(&path).is_some() {
+        if self
+            .document_versions
+            .lock()
+            .unwrap()
+            .remove(&path)
+            .is_some()
+        {
             tracing::info!("LSP ({}): didClose for {}", self.language, uri.as_str());
         } else {
             tracing::debug!(
@@ -2943,7 +2952,8 @@ async fn handle_message_dispatch(
         }
         JsonRpcMessage::Notification(notification) => {
             tracing::trace!("Received LSP notification: {}", notification.method);
-            handle_notification_dispatch(notification, async_tx, language, document_versions).await?;
+            handle_notification_dispatch(notification, async_tx, language, document_versions)
+                .await?;
         }
         JsonRpcMessage::Request(request) => {
             // Handle server-to-client requests - MUST respond to avoid timeouts
@@ -3090,11 +3100,7 @@ async fn handle_notification_dispatch(
                 // are for an outdated snapshot and should be discarded.
                 if let Some(diag_version) = params.version {
                     let path = PathBuf::from(params.uri.path().as_str());
-                    let current_version = document_versions
-                        .lock()
-                        .unwrap()
-                        .get(&path)
-                        .copied();
+                    let current_version = document_versions.lock().unwrap().get(&path).copied();
                     if let Some(current) = current_version {
                         if (diag_version as i64) < current {
                             tracing::debug!(

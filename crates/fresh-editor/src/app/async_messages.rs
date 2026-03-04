@@ -690,11 +690,7 @@ impl Editor {
             let previous_result_id = self.diagnostic_result_ids.get(uri.as_str()).cloned();
             if let Err(e) = client.document_diagnostic(request_id, uri.clone(), previous_result_id)
             {
-                tracing::debug!(
-                    "Failed to re-pull diagnostics for {}: {}",
-                    uri.as_str(),
-                    e
-                );
+                tracing::debug!("Failed to re-pull diagnostics for {}: {}", uri.as_str(), e);
             } else {
                 tracing::info!(
                     "Re-pulling diagnostics for {} (request_id={})",

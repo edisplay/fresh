@@ -734,7 +734,10 @@ mod tests {
     #[test]
     fn test_lsp_language_id_tsx() {
         let lang = Language::TypeScript;
-        assert_eq!(lang.lsp_language_id(Path::new("app.tsx")), "typescriptreact");
+        assert_eq!(
+            lang.lsp_language_id(Path::new("app.tsx")),
+            "typescriptreact"
+        );
     }
 
     #[test]
@@ -760,10 +763,7 @@ mod tests {
 
     #[test]
     fn test_lsp_language_id_other_languages() {
-        assert_eq!(
-            Language::Rust.lsp_language_id(Path::new("main.rs")),
-            "rust"
-        );
+        assert_eq!(Language::Rust.lsp_language_id(Path::new("main.rs")), "rust");
         assert_eq!(
             Language::Python.lsp_language_id(Path::new("script.py")),
             "python"

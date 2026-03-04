@@ -10,76 +10,67 @@ use crate::primitives::highlighter::HighlightSpan;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Color, Modifier, Style};
 
+/// Calculate hanging indent width from leading spaces, clamped so that
+/// at least 10 characters of content remain.
+fn hanging_indent_width(leading_spaces: usize, max_width: usize) -> usize {
+    if leading_spaces + 10 > max_width {
+        0
+    } else {
+        leading_spaces
+    }
+}
+
+/// Count the number of leading space-like characters (space or NBSP) in a string.
+fn count_leading_spaces(text: &str) -> usize {
+    text.chars()
+        .take_while(|&ch| ch == ' ' || ch == '\u{00A0}')
+        .count()
+}
+
 /// Word-wrap a single line of text to fit within a given width.
 /// Breaks at word boundaries (spaces) when possible.
 /// Falls back to character-based breaking for words longer than max_width.
-/// Returns a vector of wrapped line segments.
+/// Continuation lines are indented to match the original line's leading whitespace.
 pub fn wrap_text_line(text: &str, max_width: usize) -> Vec<String> {
     if max_width == 0 {
         return vec![text.to_string()];
     }
 
+    let indent_width = hanging_indent_width(count_leading_spaces(text), max_width);
+    let indent = " ".repeat(indent_width);
+
     let mut result = Vec::new();
     let mut current_line = String::new();
     let mut current_width = 0;
 
-    // Split into words while preserving spaces
-    let mut chars = text.chars().peekable();
-    while chars.peek().is_some() {
-        // Collect a "word" (non-space characters) or a space sequence
-        let mut word = String::new();
-        let mut word_width = 0;
-
-        // Collect spaces first
-        while let Some(&ch) = chars.peek() {
-            if ch != ' ' {
-                break;
-            }
-            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
-            word.push(ch);
-            word_width += ch_width;
-            chars.next();
-        }
-
-        // Then collect non-space characters
-        while let Some(&ch) = chars.peek() {
-            if ch == ' ' {
-                break;
-            }
-            let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
-            word.push(ch);
-            word_width += ch_width;
-            chars.next();
-        }
-
-        if word.is_empty() {
-            continue;
-        }
-
-        // Check if word fits on current line
+    for (word, word_width) in WordSplitter::new(text) {
+        // Word fits on current line
         if current_width + word_width <= max_width {
             current_line.push_str(&word);
             current_width += word_width;
-        } else if current_line.is_empty() {
-            // Word is too long for a single line, must break mid-word
+            continue;
+        }
+
+        // First word on line but too long — break mid-word
+        if current_line.is_empty() {
             for ch in word.chars() {
                 let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
                 if current_width + ch_width > max_width && !current_line.is_empty() {
                     result.push(current_line);
-                    current_line = String::new();
-                    current_width = 0;
+                    current_line = indent.clone();
+                    current_width = indent_width;
                 }
                 current_line.push(ch);
                 current_width += ch_width;
             }
-        } else {
-            // Start a new line with this word
-            result.push(current_line);
-            // Trim leading spaces from the word when starting a new line
-            let trimmed = word.trim_start();
-            current_line = trimmed.to_string();
-            current_width = unicode_width::UnicodeWidthStr::width(trimmed);
+            continue;
         }
+
+        // Start a new line with hanging indent
+        result.push(current_line);
+        let trimmed = word.trim_start_matches(|ch: char| ch == ' ' || ch == '\u{00A0}');
+        current_line = format!("{}{}", indent, trimmed);
+        current_width = indent_width + unicode_width::UnicodeWidthStr::width(trimmed);
     }
 
     if !current_line.is_empty() || result.is_empty() {
@@ -104,6 +95,7 @@ pub fn wrap_text_lines(lines: &[String], max_width: usize) -> Vec<String> {
 
 /// Word-wrap styled lines to fit within a given width.
 /// Breaks at word boundaries (spaces) when possible, preserving styling.
+/// Continuation lines are indented to match the original line's leading whitespace.
 pub fn wrap_styled_lines(lines: &[StyledLine], max_width: usize) -> Vec<StyledLine> {
     if max_width == 0 {
         return lines.to_vec();
@@ -112,7 +104,6 @@ pub fn wrap_styled_lines(lines: &[StyledLine], max_width: usize) -> Vec<StyledLi
     let mut result = Vec::new();
 
     for line in lines {
-        // Calculate the total width of this line
         let total_width: usize = line
             .spans
             .iter()
@@ -120,104 +111,175 @@ pub fn wrap_styled_lines(lines: &[StyledLine], max_width: usize) -> Vec<StyledLi
             .sum();
 
         if total_width <= max_width {
-            // Line fits, no wrapping needed
             result.push(line.clone());
-        } else {
-            // Flatten spans into styled segments (word + spaces), preserving link URLs
-            let mut segments: Vec<(String, Style, Option<String>)> = Vec::new();
+            continue;
+        }
 
-            for span in &line.spans {
-                // Split span text into words and spaces while preserving style and link
-                let mut chars = span.text.chars().peekable();
-                while chars.peek().is_some() {
-                    let mut segment = String::new();
-
-                    // Collect spaces
-                    while let Some(&ch) = chars.peek() {
-                        if ch != ' ' {
-                            break;
-                        }
-                        segment.push(ch);
-                        chars.next();
-                    }
-
-                    // Collect non-spaces (word)
-                    while let Some(&ch) = chars.peek() {
-                        if ch == ' ' {
-                            break;
-                        }
-                        segment.push(ch);
-                        chars.next();
-                    }
-
-                    if !segment.is_empty() {
-                        segments.push((segment, span.style, span.link_url.clone()));
+        // Calculate leading indent across spans (space or NBSP)
+        let leading_spaces = {
+            let mut count = 0usize;
+            'outer: for span in &line.spans {
+                for ch in span.text.chars() {
+                    if ch == ' ' || ch == '\u{00A0}' {
+                        count += 1;
+                    } else {
+                        break 'outer;
                     }
                 }
             }
+            count
+        };
+        let indent_width = hanging_indent_width(leading_spaces, max_width);
 
-            // Now wrap using word boundaries
-            let mut current_line = StyledLine::new();
-            let mut current_width = 0;
+        // Flatten spans into (text, style, link_url) segments split at word boundaries
+        let segments = flatten_styled_segments(&line.spans);
 
-            for (segment, style, link_url) in segments {
-                let seg_width = unicode_width::UnicodeWidthStr::width(segment.as_str());
+        let mut current_line = StyledLine::new();
+        let mut current_width = 0;
 
-                if current_width + seg_width <= max_width {
-                    // Segment fits
-                    current_line.push_with_link(segment, style, link_url);
-                    current_width += seg_width;
-                } else if current_width == 0 {
-                    // Segment too long for a line, must break mid-word
-                    let mut remaining = segment.as_str();
-                    while !remaining.is_empty() {
-                        let available = max_width.saturating_sub(current_width);
-                        if available == 0 {
-                            result.push(current_line);
-                            current_line = StyledLine::new();
-                            current_width = 0;
-                            continue;
-                        }
+        for (segment, style, link_url) in segments {
+            let seg_width = unicode_width::UnicodeWidthStr::width(segment.as_str());
 
-                        // Find how many chars fit
-                        let mut take_chars = 0;
-                        let mut take_width = 0;
-                        for ch in remaining.chars() {
-                            let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
-                            if take_width + w > available && take_chars > 0 {
-                                break;
-                            }
-                            take_width += w;
-                            take_chars += 1;
-                        }
+            // Segment fits on current line
+            if current_width + seg_width <= max_width {
+                current_line.push_with_link(segment, style, link_url);
+                current_width += seg_width;
+                continue;
+            }
 
-                        let byte_idx = remaining
-                            .char_indices()
-                            .nth(take_chars)
-                            .map(|(i, _)| i)
-                            .unwrap_or(remaining.len());
-                        let (take, rest) = remaining.split_at(byte_idx);
-                        current_line.push_with_link(take.to_string(), style, link_url.clone());
-                        current_width += take_width;
-                        remaining = rest;
+            // First segment on line but too long — break mid-word
+            if current_width == 0 {
+                let mut remaining = segment.as_str();
+                while !remaining.is_empty() {
+                    let available = max_width.saturating_sub(current_width);
+                    if available == 0 {
+                        result.push(current_line);
+                        current_line = new_continuation_line(indent_width);
+                        current_width = indent_width;
+                        continue;
                     }
-                } else {
-                    // Start new line with this segment
-                    result.push(current_line);
-                    current_line = StyledLine::new();
-                    // For styled content (code, etc.), preserve spacing
-                    current_line.push_with_link(segment, style, link_url);
-                    current_width = seg_width;
+
+                    let (take, rest) = split_at_width(remaining, available);
+                    current_line.push_with_link(take.to_string(), style, link_url.clone());
+                    current_width += unicode_width::UnicodeWidthStr::width(take);
+                    remaining = rest;
                 }
+                continue;
             }
 
-            if !current_line.spans.is_empty() {
-                result.push(current_line);
-            }
+            // Start new continuation line with hanging indent
+            result.push(current_line);
+            current_line = new_continuation_line(indent_width);
+            // Trim leading space/NBSP — either replaced by hanging indent or
+            // just a word separator that shouldn't start a new line.
+            let trimmed = segment.trim_start_matches(|ch: char| ch == ' ' || ch == '\u{00A0}');
+            let trimmed_width = unicode_width::UnicodeWidthStr::width(trimmed);
+            current_line.push_with_link(trimmed.to_string(), style, link_url);
+            current_width = indent_width + trimmed_width;
+        }
+
+        if !current_line.spans.is_empty() {
+            result.push(current_line);
         }
     }
 
     result
+}
+
+/// Create a new `StyledLine` pre-filled with hanging indent spaces.
+fn new_continuation_line(indent_width: usize) -> StyledLine {
+    let mut line = StyledLine::new();
+    if indent_width > 0 {
+        line.push(" ".repeat(indent_width), Style::default());
+    }
+    line
+}
+
+/// Split `text` so the first part fits within `available` display columns.
+/// Returns (taken, remaining).
+fn split_at_width(text: &str, available: usize) -> (&str, &str) {
+    let mut take_chars = 0;
+    let mut take_width = 0;
+    for ch in text.chars() {
+        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+        if take_width + w > available && take_chars > 0 {
+            break;
+        }
+        take_width += w;
+        take_chars += 1;
+    }
+    let byte_idx = text
+        .char_indices()
+        .nth(take_chars)
+        .map(|(i, _)| i)
+        .unwrap_or(text.len());
+    text.split_at(byte_idx)
+}
+
+/// Flatten styled spans into word-boundary segments, preserving style and link info.
+fn flatten_styled_segments(spans: &[StyledSpan]) -> Vec<(String, Style, Option<String>)> {
+    let mut segments = Vec::new();
+    for span in spans {
+        for (word, _width) in WordSplitter::new(&span.text) {
+            segments.push((word, span.style, span.link_url.clone()));
+        }
+    }
+    segments
+}
+
+/// Iterator that splits text into word segments (spaces + non-spaces),
+/// yielding `(segment_text, display_width)` pairs.
+struct WordSplitter<'a> {
+    chars: std::iter::Peekable<std::str::Chars<'a>>,
+}
+
+impl<'a> WordSplitter<'a> {
+    fn new(text: &'a str) -> Self {
+        Self {
+            chars: text.chars().peekable(),
+        }
+    }
+}
+
+impl<'a> Iterator for WordSplitter<'a> {
+    type Item = (String, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.chars.peek().is_none() {
+            return None;
+        }
+
+        let mut word = String::new();
+        let mut width = 0;
+
+        // Collect leading spaces (regular or NBSP)
+        while let Some(&ch) = self.chars.peek() {
+            if ch != ' ' && ch != '\u{00A0}' {
+                break;
+            }
+            let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+            word.push(ch);
+            width += w;
+            self.chars.next();
+        }
+
+        // Collect non-space characters
+        while let Some(&ch) = self.chars.peek() {
+            if ch == ' ' || ch == '\u{00A0}' {
+                break;
+            }
+            let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+            word.push(ch);
+            width += w;
+            self.chars.next();
+        }
+
+        if word.is_empty() {
+            None
+        } else {
+            Some((word, width))
+        }
+    }
 }
 
 /// A styled span for markdown rendering
@@ -346,6 +408,24 @@ fn add_code_text_to_lines(lines: &mut Vec<StyledLine>, text: &str, style: Style)
     }
 }
 
+/// Preserve leading whitespace in text by replacing leading regular spaces
+/// with non-breaking spaces. Markdown parsers strip leading spaces from
+/// paragraphs, but LSP documentation (e.g. Python docstrings) uses indentation
+/// for structure. Non-breaking spaces survive markdown parsing.
+fn preserve_leading_whitespace(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let indent = line.len() - line.trim_start_matches(' ').len();
+            if indent > 0 {
+                format!("{}{}", "\u{00A0}".repeat(indent), &line[indent..])
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Parse markdown text into styled lines for terminal rendering
 ///
 /// If `registry` is provided, uses syntect for syntax highlighting in code blocks,
@@ -355,10 +435,14 @@ pub fn parse_markdown(
     theme: &crate::view::theme::Theme,
     registry: Option<&GrammarRegistry>,
 ) -> Vec<StyledLine> {
+    // Preserve leading whitespace (as NBSP) before markdown parsing,
+    // since pulldown_cmark strips leading spaces from paragraph text.
+    let preserved = preserve_leading_whitespace(text);
+
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
 
-    let parser = Parser::new_ext(text, options);
+    let parser = Parser::new_ext(&preserved, options);
     let mut lines: Vec<StyledLine> = vec![StyledLine::new()];
 
     // Style stack for nested formatting
@@ -1162,18 +1246,24 @@ mod tests {
             );
         }
 
-        // Verify the content is preserved (concatenate all wrapped text)
+        // Verify no content is lost (spaces at wrap points are trimmed, which is expected)
         let original_text: String = lines
             .iter()
             .flat_map(|l| l.spans.iter().map(|s| s.text.as_str()))
             .collect();
         let wrapped_text: String = wrapped
             .iter()
-            .flat_map(|l| l.spans.iter().map(|s| s.text.as_str()))
-            .collect();
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.text.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         assert_eq!(
             original_text, wrapped_text,
-            "Content should be preserved after wrapping"
+            "Content should be preserved after wrapping (with spaces at line joins)"
         );
     }
 
@@ -1220,5 +1310,60 @@ mod tests {
             let width = unicode_width::UnicodeWidthStr::width(line.as_str());
             assert!(width <= 20, "Line exceeds max width: {}", line);
         }
+    }
+
+    #[test]
+    fn test_signature_help_doc_indent_preserved() {
+        // Simulate the markdown content produced by signature help for print()
+        // The doc text from pyright uses blank lines between param name and description
+        let theme = Theme::load_builtin(theme::THEME_DARK).unwrap();
+        let content = "(*values: object, sep: str) -> None\n\n> *values\n\n---\n\nPrints the values to a stream.\n\nsep\n\n  string inserted between values, default a space.\n\nend\n\n  string appended after the last value, default a newline.";
+
+        let lines = parse_markdown(content, &theme, None);
+        let texts: Vec<String> = lines.iter().map(get_line_text).collect();
+        eprintln!("[TEST] Parsed markdown lines:");
+        for (i, t) in texts.iter().enumerate() {
+            eprintln!("  [{}] {:?}", i, t);
+        }
+
+        // Find the line with "string appended" - it should have leading spaces
+        let desc_line = texts
+            .iter()
+            .find(|t| t.contains("string appended"))
+            .expect("Should find 'string appended' line");
+        eprintln!("[TEST] desc_line: {:?}", desc_line);
+
+        // Now test wrapping at width 40 (narrow popup to force wrapping)
+        let wrapped = wrap_styled_lines(&lines, 40);
+        let wrapped_texts: Vec<String> = wrapped.iter().map(get_line_text).collect();
+        eprintln!("[TEST] Wrapped lines:");
+        for (i, t) in wrapped_texts.iter().enumerate() {
+            eprintln!("  [{}] {:?}", i, t);
+        }
+
+        // Find continuation of "string appended" line
+        let desc_idx = wrapped_texts
+            .iter()
+            .position(|t| t.contains("string appended"))
+            .expect("Should find 'string appended' line in wrapped output");
+        assert!(
+            desc_idx + 1 < wrapped_texts.len(),
+            "Line should have wrapped, but didn't. Lines: {:?}",
+            wrapped_texts
+        );
+        let continuation = &wrapped_texts[desc_idx + 1];
+        eprintln!("[TEST] continuation: {:?}", continuation);
+
+        // Continuation should have indent (spaces matching the NBSP indent)
+        let orig_indent = count_leading_spaces(desc_line);
+        let cont_indent = count_leading_spaces(continuation);
+        eprintln!(
+            "[TEST] orig_indent={}, cont_indent={}",
+            orig_indent, cont_indent
+        );
+        assert_eq!(
+            cont_indent, orig_indent,
+            "Continuation line should have same indent as original"
+        );
     }
 }

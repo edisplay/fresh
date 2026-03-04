@@ -645,9 +645,7 @@ fn test_completion_underscore_filters() -> anyhow::Result<()> {
 // Completion popup alignment and formatting consistency
 // ============================================================================
 
-/// Helper: set up an editor with a frameless completion popup (matching lsp_requests.rs behavior).
-/// This creates the popup the same way the initial LSP completion response does:
-/// bordered: false, title: None.
+/// Helper: set up an editor with a completion popup matching `build_completion_popup()` format.
 fn setup_frameless_completion_popup(prefix: &str) -> anyhow::Result<EditorTestHarness> {
     let mut harness = EditorTestHarness::new(80, 24)?;
 
@@ -679,7 +677,7 @@ fn setup_frameless_completion_popup(prefix: &str) -> anyhow::Result<EditorTestHa
     ];
     harness.editor_mut().set_completion_items(completion_items);
 
-    // Show popup exactly as lsp_requests.rs does: bordered: false, title: None
+    // Show popup matching build_completion_popup() format
     harness
         .apply_event(Event::ShowPopup {
             popup: PopupData {
@@ -713,7 +711,7 @@ fn setup_frameless_completion_popup(prefix: &str) -> anyhow::Result<EditorTestHa
                 position: PopupPositionData::BelowCursor,
                 width: 50,
                 max_height: 15,
-                bordered: false,
+                bordered: true,
             },
         })
         .unwrap();
@@ -722,34 +720,27 @@ fn setup_frameless_completion_popup(prefix: &str) -> anyhow::Result<EditorTestHa
     Ok(harness)
 }
 
-/// After typing a filter character, the re-filtered completion popup should remain
-/// frameless (bordered: false, title: None) — matching the initial popup format.
-///
-/// Bug: `refilter_completion_popup` in popup_actions.rs creates the replacement popup
-/// with `bordered: true` and `title: Some(...)`, producing a visually different popup
-/// format after typing one character.
+/// After typing a filter character, the re-filtered completion popup format must
+/// stay consistent with the initial popup (both use `build_completion_popup`).
 #[test]
-fn test_completion_popup_stays_frameless_after_filter() -> anyhow::Result<()> {
+fn test_completion_popup_format_consistent_after_filter() -> anyhow::Result<()> {
     let mut harness = setup_frameless_completion_popup("calc")?;
 
-    // Verify the initial popup is frameless (no border characters)
+    // Verify the initial popup shows completions
     let screen_before = harness.screen_to_string();
     assert!(
         screen_before.contains("calculate_difference"),
         "Initial popup should show completions"
     );
 
-    // Verify popup is frameless
-    let popup = harness
+    // Record initial popup properties
+    let initial_bordered = harness
         .editor()
         .active_state()
         .popups
         .top()
-        .expect("popup should be visible");
-    assert!(
-        !popup.bordered,
-        "Initial popup should be frameless (bordered: false)"
-    );
+        .expect("popup should be visible")
+        .bordered;
 
     // Type a filter character — this triggers refilter_completion_popup
     harness.send_key(KeyCode::Char('u'), KeyModifiers::NONE)?;
@@ -761,21 +752,16 @@ fn test_completion_popup_stays_frameless_after_filter() -> anyhow::Result<()> {
         "Popup should remain visible after typing filter char"
     );
 
-    // The re-filtered popup MUST also be frameless
+    // The re-filtered popup MUST have the same format as the initial popup
     let popup = harness
         .editor()
         .active_state()
         .popups
         .top()
         .expect("popup should still be visible");
-    assert!(
-        !popup.bordered,
-        "Re-filtered popup should remain frameless (bordered: false), but it switched to bordered: true"
-    );
-    assert!(
-        popup.title.is_none(),
-        "Re-filtered popup should have no title, but it has: {:?}",
-        popup.title
+    assert_eq!(
+        popup.bordered, initial_bordered,
+        "Re-filtered popup border should match initial popup"
     );
 
     Ok(())

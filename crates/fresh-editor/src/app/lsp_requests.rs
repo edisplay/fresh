@@ -23,6 +23,18 @@ use crate::view::prompt::{Prompt, PromptType};
 
 use super::{uri_to_path, Editor, SemanticTokenRangeRequest};
 
+/// Ensure every line in a docstring is separated by a blank line.
+///
+/// LSP documentation (e.g. from pyright) often uses single newlines between
+/// lines, which markdown treats as soft breaks within one paragraph. This
+/// doubles all single newlines so each line becomes its own paragraph with
+/// spacing between them.
+fn space_doc_paragraphs(text: &str) -> String {
+    text.replace("\n\n", "\x00")
+        .replace('\n', "\n\n")
+        .replace('\x00', "\n\n")
+}
+
 const SEMANTIC_TOKENS_FULL_DEBOUNCE_MS: u64 = 500;
 const SEMANTIC_TOKENS_RANGE_DEBOUNCE_MS: u64 = 50;
 const SEMANTIC_TOKENS_RANGE_PADDING_LINES: usize = 10;
@@ -92,8 +104,7 @@ impl Editor {
             return Ok(());
         }
 
-        let popup_data =
-            crate::app::popup_actions::build_completion_popup(&filtered_items, 0);
+        let popup_data = crate::app::popup_actions::build_completion_popup(&filtered_items, 0);
 
         // Store original items for type-to-filter
         self.completion_items = Some(items);
@@ -996,8 +1007,7 @@ impl Editor {
             };
             if !doc_text.is_empty() {
                 content.push_str("\n---\n\n");
-                content.push_str(&doc_text);
-                content.push('\n');
+                content.push_str(&space_doc_paragraphs(&doc_text));
             }
         }
 
@@ -1005,8 +1015,7 @@ impl Editor {
         use crate::view::popup::{Popup, PopupPosition};
         use ratatui::style::Style;
 
-        let mut popup =
-            Popup::markdown(&content, &self.theme, Some(&self.grammar_registry));
+        let mut popup = Popup::markdown(&content, &self.theme, Some(&self.grammar_registry));
         popup.title = Some(t!("lsp.popup_signature").to_string());
         popup.transient = true;
         popup.position = PopupPosition::BelowCursor;
@@ -2404,5 +2413,34 @@ mod tests {
         Editor::apply_inlay_hints_to_state(&mut state, &hints);
 
         assert!(state.virtual_texts.is_empty());
+    }
+
+    #[test]
+    fn test_space_doc_paragraphs_inserts_blank_lines() {
+        use super::space_doc_paragraphs;
+
+        // Single newlines become double newlines
+        let input = "sep\n  description.\nend\n  another.";
+        let result = space_doc_paragraphs(input);
+        assert_eq!(result, "sep\n\n  description.\n\nend\n\n  another.");
+    }
+
+    #[test]
+    fn test_space_doc_paragraphs_preserves_existing_blank_lines() {
+        use super::space_doc_paragraphs;
+
+        // Already-double newlines stay double (not quadrupled)
+        let input = "First paragraph.\n\nSecond paragraph.";
+        let result = space_doc_paragraphs(input);
+        assert_eq!(result, "First paragraph.\n\nSecond paragraph.");
+    }
+
+    #[test]
+    fn test_space_doc_paragraphs_plain_text() {
+        use super::space_doc_paragraphs;
+
+        let input = "Just a single line of docs.";
+        let result = space_doc_paragraphs(input);
+        assert_eq!(result, "Just a single line of docs.");
     }
 }

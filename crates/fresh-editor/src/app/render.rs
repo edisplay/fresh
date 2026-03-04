@@ -836,10 +836,8 @@ impl Editor {
                 // not the current cursor position.
                 let word_start_screen_pos = {
                     use crate::primitives::word_navigation::find_completion_word_start;
-                    let word_start = find_completion_word_start(
-                        &state.buffer,
-                        primary_cursor.position,
-                    );
+                    let word_start =
+                        find_completion_word_start(&state.buffer, primary_cursor.position);
                     let word_start_cursor = crate::model::cursor::Cursor::new(word_start);
                     viewport
                         .as_ref()
@@ -855,10 +853,8 @@ impl Editor {
                     .map(|r| (r.x + gutter_width, r.y))
                     .unwrap_or((gutter_width, 1));
 
-                let cursor_screen_pos = (
-                    cursor_screen_pos.0 + base_x,
-                    cursor_screen_pos.1 + base_y,
-                );
+                let cursor_screen_pos =
+                    (cursor_screen_pos.0 + base_x, cursor_screen_pos.1 + base_y);
                 let word_start_screen_pos = (
                     word_start_screen_pos.0 + base_x,
                     word_start_screen_pos.1 + base_y,

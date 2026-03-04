@@ -321,7 +321,7 @@ impl From<Cli> for Args {
                     cli.files,
                     None,
                 ),
-                
+
                 ["session", "info", name, ..] | ["s", "info", name, ..] => {
                     // Info not fully implemented, treat as list for now
                     let _ = name;

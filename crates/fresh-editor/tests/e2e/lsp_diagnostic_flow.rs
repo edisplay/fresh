@@ -642,10 +642,7 @@ fn test_edit_save_edit_save_diagnostic_flow() -> anyhow::Result<()> {
         log.contains("SENT: publishDiagnostics with errors (initial)"),
         "Missing initial diagnostics"
     );
-    assert!(
-        log.contains("ACTION: didChange"),
-        "Missing didChange"
-    );
+    assert!(log.contains("ACTION: didChange"), "Missing didChange");
     assert!(
         log.contains("ACTION: didSave save_count=1"),
         "Missing first save"

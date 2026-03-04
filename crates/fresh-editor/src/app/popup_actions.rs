@@ -319,11 +319,7 @@ impl Editor {
 
         // Try to preserve selection
         let selected = current_selection
-            .and_then(|sel| {
-                filtered_items
-                    .iter()
-                    .position(|item| item.label == sel)
-            })
+            .and_then(|sel| filtered_items.iter().position(|item| item.label == sel))
             .unwrap_or(0);
 
         let popup_data = build_completion_popup(&filtered_items, selected);
