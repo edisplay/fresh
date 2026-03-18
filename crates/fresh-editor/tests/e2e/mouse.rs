@@ -1858,7 +1858,7 @@ fn test_double_click_drag_extends_selection_by_words() {
     // "quick" at cols gutter_width..gutter_width+5, " brown" at +6..+12, " fox" at +13..+17
     let quick_col = gutter_width + 3; // middle of "quick"
     let brown_col = gutter_width + 9; // in "brown"
-    let fox_col = gutter_width + 14;  // in "fox"
+    let fox_col = gutter_width + 14; // in "fox"
 
     // 1. First click
     harness
