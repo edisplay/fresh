@@ -4032,17 +4032,20 @@ impl Editor {
             _ => None,
         };
 
+        // Limit searches to avoid O(n) scans on huge files.
+        use crate::view::bracket_highlight_overlay::MAX_BRACKET_SEARCH_BYTES;
+
         // If cursor is not on a bracket, search backward for the nearest
         // enclosing opening bracket, then jump to its matching close.
         let (opening, closing, search_start, forward) =
             if let Some((opening, closing, forward)) = bracket_info {
                 (opening, closing, pos, forward)
             } else {
-                let buffer_len = state.buffer.len();
                 // Search backward from cursor to find enclosing opening bracket.
                 // Track depth per bracket type to handle nesting correctly.
                 let mut depths: Vec<i32> = vec![0; BRACKET_PAIRS.len()];
                 let mut found = None;
+                let search_limit = pos.saturating_sub(MAX_BRACKET_SEARCH_BYTES);
                 let mut search_pos = pos.saturating_sub(1);
                 loop {
                     let b = state.buffer.slice_bytes(search_pos..search_pos + 1);
@@ -4065,7 +4068,7 @@ impl Editor {
                             break;
                         }
                     }
-                    if search_pos == 0 {
+                    if search_pos <= search_limit {
                         break;
                     }
                     search_pos -= 1;
@@ -4080,13 +4083,14 @@ impl Editor {
                 }
             };
 
-        // Find matching bracket
+        // Find matching bracket (bounded to MAX_BRACKET_SEARCH_BYTES)
         let buffer_len = state.buffer.len();
         let mut depth = 1;
         let matching_pos = if forward {
+            let search_limit = (search_start + 1 + MAX_BRACKET_SEARCH_BYTES).min(buffer_len);
             let mut search_pos = search_start + 1;
             let mut found = None;
-            while search_pos < buffer_len && depth > 0 {
+            while search_pos < search_limit && depth > 0 {
                 let b = state.buffer.slice_bytes(search_pos..search_pos + 1);
                 if !b.is_empty() {
                     let c = b[0] as char;
@@ -4103,6 +4107,7 @@ impl Editor {
             }
             found
         } else {
+            let search_limit = search_start.saturating_sub(MAX_BRACKET_SEARCH_BYTES);
             let mut search_pos = search_start.saturating_sub(1);
             let mut found = None;
             loop {
@@ -4119,7 +4124,7 @@ impl Editor {
                         }
                     }
                 }
-                if search_pos == 0 {
+                if search_pos <= search_limit {
                     break;
                 }
                 search_pos -= 1;
