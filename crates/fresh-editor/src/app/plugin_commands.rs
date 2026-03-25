@@ -1743,7 +1743,12 @@ impl Editor {
                 .collect();
 
             // Update config.languages with the extensions so detect_language() works
-            for crate::primitives::grammar::GrammarSpec { language, extensions, .. } in &additional {
+            for crate::primitives::grammar::GrammarSpec {
+                language,
+                extensions,
+                ..
+            } in &additional
+            {
                 let lang_config = self.config.languages.entry(language.clone()).or_default();
                 for ext in extensions {
                     if !lang_config.extensions.contains(ext) {
@@ -1839,7 +1844,12 @@ impl Editor {
             .collect();
 
         // Update config.languages with the extensions so detect_language() works
-        for crate::primitives::grammar::GrammarSpec { language, extensions, .. } in &additional {
+        for crate::primitives::grammar::GrammarSpec {
+            language,
+            extensions,
+            ..
+        } in &additional
+        {
             let lang_config = self.config.languages.entry(language.clone()).or_default();
             for ext in extensions {
                 if !lang_config.extensions.contains(ext) {
