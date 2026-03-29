@@ -578,6 +578,13 @@ pub struct EditorConfig {
     #[schemars(extend("x-section" = "Display"))]
     pub wrap_column: Option<usize>,
 
+    /// Width of the page in page view mode (in columns).
+    /// Controls the content width when page view is active, with centering margins.
+    /// Defaults to 80. Set to `null` to use the full viewport width.
+    #[serde(default = "default_page_width")]
+    #[schemars(extend("x-section" = "Display"))]
+    pub page_width: Option<usize>,
+
     /// Enable syntax highlighting for code files
     #[serde(default = "default_true")]
     #[schemars(extend("x-section" = "Display"))]
@@ -1125,6 +1132,7 @@ impl Default for EditorConfig {
             line_wrap: true,
             wrap_indent: true,
             wrap_column: None,
+            page_width: default_page_width(),
             highlight_timeout_ms: default_highlight_timeout(),
             snapshot_interval: default_snapshot_interval(),
             large_file_threshold_bytes: default_large_file_threshold(),
@@ -1426,6 +1434,10 @@ fn default_on_save_timeout() -> u64 {
     10000
 }
 
+fn default_page_width() -> Option<usize> {
+    Some(80)
+}
+
 /// Language-specific configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[schemars(extend("x-display-field" = "/grammar"))]
@@ -1495,7 +1507,7 @@ pub struct LanguageConfig {
 
     /// Width of the page in page view mode (in columns).
     /// Controls the content width when page view is active, with centering margins.
-    /// If not specified (`null`), uses the viewport width.
+    /// If not specified (`null`), falls back to the global `editor.page_width` setting.
     #[serde(default)]
     pub page_width: Option<usize>,
 

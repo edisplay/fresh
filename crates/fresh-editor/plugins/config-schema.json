@@ -35,6 +35,7 @@
         "line_wrap": true,
         "wrap_indent": true,
         "wrap_column": null,
+        "page_width": 80,
         "syntax_highlighting": true,
         "show_menu_bar": true,
         "menu_bar_mnemonics": true,
@@ -271,6 +272,17 @@
           "format": "uint",
           "minimum": 0,
           "default": null,
+          "x-section": "Display"
+        },
+        "page_width": {
+          "description": "Width of the page in page view mode (in columns).\nControls the content width when page view is active, with centering margins.\nDefaults to 80. Set to `null` to use the full viewport width.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0,
+          "default": 80,
           "x-section": "Display"
         },
         "syntax_highlighting": {
@@ -957,7 +969,7 @@
           "default": null
         },
         "page_width": {
-          "description": "Width of the page in page view mode (in columns).\nControls the content width when page view is active, with centering margins.\nIf not specified (`null`), uses the viewport width.",
+          "description": "Width of the page in page view mode (in columns).\nControls the content width when page view is active, with centering margins.\nIf not specified (`null`), falls back to the global `editor.page_width` setting.",
           "type": [
             "integer",
             "null"

@@ -48,7 +48,7 @@ impl Editor {
         let state = self.buffers.get(&buffer_id)?;
         let lang_config = self.config.languages.get(&state.language)?;
         if lang_config.page_view == Some(true) {
-            Some(lang_config.page_width)
+            Some(lang_config.page_width.or(self.config.editor.page_width))
         } else {
             None
         }

@@ -20,7 +20,8 @@ impl Editor {
             .buffers
             .get(&active_buffer)
             .and_then(|s| self.config.languages.get(&s.language))
-            .and_then(|lc| lc.page_width);
+            .and_then(|lc| lc.page_width)
+            .or(self.config.editor.page_width);
 
         let view_mode = {
             let current = self

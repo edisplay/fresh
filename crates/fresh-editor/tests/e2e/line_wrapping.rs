@@ -2387,3 +2387,68 @@ fn test_page_view_not_activated_for_other_languages() {
         screen
     );
 }
+
+/// Test that page view defaults to 80 columns on a wide terminal
+#[test]
+fn test_page_view_default_width_80() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    // Use a wide terminal so 80-col centering is visible
+    let mut harness = EditorTestHarness::new(160, 24).unwrap();
+
+    // Create a file with content that fits within 80 columns
+    let content = "Hello from page view test";
+    let fixture =
+        crate::common::fixtures::TestFixture::new("test_default_width.txt", content).unwrap();
+    harness.open_file(&fixture.path).unwrap();
+    harness.render().unwrap();
+
+    // Toggle page view on
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("Toggle Page View").unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    let screen = harness.screen_to_string();
+
+    // Find the row containing our content
+    let mut content_row = String::new();
+    let height = 24u16;
+    for y in 0..height {
+        let row = harness.get_row_text(y);
+        if row.contains("Hello from") {
+            content_row = row;
+            break;
+        }
+    }
+    assert!(
+        !content_row.is_empty(),
+        "Should find a row with content\nScreen:\n{}",
+        screen
+    );
+
+    let trimmed = content_row.trim();
+
+    // Content should be at most 80 chars wide
+    assert!(
+        trimmed.len() <= 80,
+        "Page view content should be at most 80 columns wide, got {} chars: '{}'\nScreen:\n{}",
+        trimmed.len(),
+        trimmed,
+        screen
+    );
+
+    // There should be left margin (centering) since terminal is 160 cols
+    let leading_spaces = content_row.len() - content_row.trim_start().len();
+    assert!(
+        leading_spaces >= 30,
+        "Expected centering margin (>=30 cols) on 160-col terminal, got {} leading spaces\nRow: '{}'\nScreen:\n{}",
+        leading_spaces,
+        content_row,
+        screen
+    );
+}
