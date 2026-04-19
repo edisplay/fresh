@@ -593,10 +593,10 @@ type GrammarInfoSnapshot = {
 	*/
 	short_name: string | null;
 };
-export type AuthorityFilesystem = {
+type AuthorityFilesystem = {
 	kind: "local";
 };
-export type AuthoritySpawner = {
+type AuthoritySpawner = {
 	kind: "local";
 } | {
 	kind: "docker-exec";
@@ -604,7 +604,7 @@ export type AuthoritySpawner = {
 	user?: string | null;
 	workspace?: string | null;
 };
-export type AuthorityTerminalWrapper = {
+type AuthorityTerminalWrapper = {
 	kind: "host-shell";
 } | {
 	kind: "explicit";
@@ -612,7 +612,7 @@ export type AuthorityTerminalWrapper = {
 	args: string[];
 	manages_cwd?: boolean;
 };
-export type AuthorityPayload = {
+type AuthorityPayload = {
 	filesystem: AuthorityFilesystem;
 	spawner: AuthoritySpawner;
 	terminal_wrapper: AuthorityTerminalWrapper;

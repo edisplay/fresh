@@ -130,9 +130,13 @@ fn get_type_decl(type_name: &str) -> Option<String> {
 
 /// Hand-written declaration for `AuthorityPayload` and its helpers.
 /// See the doc comment on the match arm for why this isn't ts-rs.
-const AUTHORITY_PAYLOAD_DECL: &str = r#"export type AuthorityFilesystem = { kind: "local" };
+///
+/// Emitted as plain `type …` (not `export type …`) to match the rest of
+/// the file — the generated d.ts lives in global scope and plugins
+/// reference types by bare name without importing them.
+const AUTHORITY_PAYLOAD_DECL: &str = r#"type AuthorityFilesystem = { kind: "local" };
 
-export type AuthoritySpawner =
+type AuthoritySpawner =
   | { kind: "local" }
   | {
       kind: "docker-exec";
@@ -141,7 +145,7 @@ export type AuthoritySpawner =
       workspace?: string | null;
     };
 
-export type AuthorityTerminalWrapper =
+type AuthorityTerminalWrapper =
   | { kind: "host-shell" }
   | {
       kind: "explicit";
@@ -150,7 +154,7 @@ export type AuthorityTerminalWrapper =
       manages_cwd?: boolean;
     };
 
-export type AuthorityPayload = {
+type AuthorityPayload = {
   filesystem: AuthorityFilesystem;
   spawner: AuthoritySpawner;
   terminal_wrapper: AuthorityTerminalWrapper;

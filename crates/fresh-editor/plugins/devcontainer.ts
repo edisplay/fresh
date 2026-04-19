@@ -785,39 +785,198 @@ function devcontainer_on_action_result(data: ActionPopupResultData): void {
       case "dismissed":
         break;
     }
+    return;
+  }
+  if (data.popup_id === "devcontainer-attach") {
+    devcontainer_on_attach_popup(data);
   }
 }
 registerHandler("devcontainer_on_action_result", devcontainer_on_action_result);
 
-async function devcontainer_rebuild(): Promise<void> {
-  // TODO: broken when core has auto-attached. Two independent issues:
-  //   1. editor.createTerminal() routes through docker exec into the
-  //      running container, so the `devcontainer up` command below runs
-  //      inside the container (where the CLI usually isn't installed).
-  //   2. Even if it succeeded, the core's cached container_id wouldn't
-  //      refresh, so subsequent terminals would target the destroyed
-  //      container.
-  // Both go away once core exposes a rebuild op (see
-  // docs/internal/DEVCONTAINER_INTEGRATION_PLAN.md). Until then, this
-  // command is only usable with `devcontainer.auto_detect = false`.
-  const result = await editor.spawnProcess("which", ["devcontainer"]);
-  if (result.exit_code !== 0) {
+// =============================================================================
+// Authority lifecycle
+// =============================================================================
+//
+// "Attach" = run `devcontainer up` on the host and install a container
+// authority via editor.setAuthority({...}). The authority transition
+// restarts the editor so every cached filesystem handle / LSP / PTY
+// gets recreated against the new backend. We use spawnHostProcess for
+// the CLI call so that a plugin triggering rebuild from inside an
+// already-attached session still runs on the host, not inside the
+// container that is about to be destroyed.
+
+interface DevcontainerUpResult {
+  outcome?: string;
+  containerId?: string;
+  remoteUser?: string;
+  remoteWorkspaceFolder?: string;
+}
+
+function parseDevcontainerUpOutput(stdout: string): DevcontainerUpResult | null {
+  const lines = stdout.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line.startsWith("{")) continue;
+    try {
+      return JSON.parse(line) as DevcontainerUpResult;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function buildContainerAuthorityPayload(
+  result: DevcontainerUpResult,
+): AuthorityPayload | null {
+  if (!result.containerId) return null;
+  const user = result.remoteUser ?? null;
+  const workspace = result.remoteWorkspaceFolder ?? null;
+
+  const args: string[] = ["exec", "-it"];
+  if (user) {
+    args.push("-u", user);
+  }
+  if (workspace) {
+    args.push("-w", workspace);
+  }
+  args.push(result.containerId, "bash", "-l");
+
+  const shortId = result.containerId.slice(0, 12);
+
+  return {
+    filesystem: { kind: "local" },
+    spawner: {
+      kind: "docker-exec",
+      container_id: result.containerId,
+      user,
+      workspace,
+    },
+    terminal_wrapper: {
+      kind: "explicit",
+      command: "docker",
+      args,
+      manages_cwd: true,
+    },
+    display_label: "Container:" + shortId,
+  };
+}
+
+async function runDevcontainerUp(extraArgs: string[]): Promise<void> {
+  const cwd = editor.getCwd();
+  const which = await editor.spawnHostProcess("which", ["devcontainer"]);
+  if (which.exit_code !== 0) {
     showCliNotFoundPopup();
     return;
   }
 
-  // Open a terminal to stream the rebuild output live.
-  // Wrap the whole thing in `exec sh -c '...'` so the host shell is replaced
-  // by the rebuild pipeline — once it finishes (success or failure) the
-  // terminal split closes instead of leaving the user at a host prompt.
-  const cwd = editor.getCwd();
-  const term = await editor.createTerminal({ direction: "horizontal", ratio: 0.4, focus: true });
-  const innerCmd = `devcontainer up --remove-existing-container --workspace-folder ${JSON.stringify(cwd)}; rc=$?; echo ""; echo "--- Rebuild finished (exit: $rc) ---"; exit $rc`;
-  const rebuildCmd = `exec sh -c ${JSON.stringify(innerCmd)}\n`;
-  editor.sendTerminalInput(term.terminalId, rebuildCmd);
   editor.setStatus(editor.t("status.rebuilding"));
+  const args = ["up", "--workspace-folder", cwd, ...extraArgs];
+  const result = await editor.spawnHostProcess("devcontainer", args);
+  if (result.exit_code !== 0) {
+    editor.setStatus(
+      editor.t("status.rebuild_failed", { error: result.stderr.trim() || "unknown" }),
+    );
+    return;
+  }
+
+  const parsed = parseDevcontainerUpOutput(result.stdout);
+  if (!parsed || parsed.outcome !== "success" || !parsed.containerId) {
+    editor.setStatus(
+      editor.t("status.rebuild_failed", { error: "could not parse devcontainer up output" }),
+    );
+    return;
+  }
+
+  const payload = buildContainerAuthorityPayload(parsed);
+  if (!payload) {
+    editor.setStatus(
+      editor.t("status.rebuild_failed", { error: "missing containerId" }),
+    );
+    return;
+  }
+
+  // setAuthority fires the restart flow in core. The status message
+  // we set here won't survive the restart; the plugin will re-init
+  // with the new authority active and print status.detected again.
+  editor.setAuthority(payload);
+}
+
+async function devcontainer_attach(): Promise<void> {
+  if (!config) {
+    editor.setStatus(editor.t("status.no_config"));
+    return;
+  }
+  await runDevcontainerUp([]);
+}
+registerHandler("devcontainer_attach", devcontainer_attach);
+
+async function devcontainer_rebuild(): Promise<void> {
+  if (!config) {
+    editor.setStatus(editor.t("status.no_config"));
+    return;
+  }
+  await runDevcontainerUp(["--remove-existing-container"]);
 }
 registerHandler("devcontainer_rebuild", devcontainer_rebuild);
+
+async function devcontainer_detach(): Promise<void> {
+  editor.clearAuthority();
+}
+registerHandler("devcontainer_detach", devcontainer_detach);
+
+// =============================================================================
+// One-shot attach prompt
+// =============================================================================
+//
+// When the plugin loads and a devcontainer.json is found, check whether
+// we've already asked the user about this workspace. If not, surface a
+// one-shot "attach?" popup. The answer is remembered per-workspace via
+// plugin global state (keyed by cwd) so reopening the same project
+// doesn't re-prompt every time.
+
+type AttachDecision = "attached" | "dismissed";
+
+function attachDecisionKey(): string {
+  return "attach:" + editor.getCwd();
+}
+
+function readAttachDecision(): AttachDecision | null {
+  const raw = editor.getGlobalState(attachDecisionKey()) as unknown;
+  if (raw === "attached" || raw === "dismissed") return raw;
+  return null;
+}
+
+function writeAttachDecision(value: AttachDecision): void {
+  editor.setGlobalState(attachDecisionKey(), value);
+}
+
+function showAttachPrompt(): void {
+  editor.showActionPopup({
+    id: "devcontainer-attach",
+    title: editor.t("popup.attach_title"),
+    message: editor.t("popup.attach_message", {
+      name: config?.name ?? "unnamed",
+    }),
+    actions: [
+      { id: "attach", label: editor.t("popup.attach_action_attach") },
+      { id: "dismiss", label: editor.t("popup.attach_action_dismiss") },
+    ],
+  });
+}
+
+function devcontainer_on_attach_popup(data: ActionPopupResultData): void {
+  if (data.popup_id !== "devcontainer-attach") return;
+  if (data.action_id === "attach") {
+    writeAttachDecision("attached");
+    // Fire and forget: runDevcontainerUp's setAuthority call restarts
+    // the editor, so nothing after this runs anyway.
+    void devcontainer_attach();
+  } else {
+    writeAttachDecision("dismissed");
+  }
+}
+registerHandler("devcontainer_on_attach_popup", devcontainer_on_attach_popup);
 
 // =============================================================================
 // Event Handlers
@@ -867,6 +1026,18 @@ function registerCommands(): void {
     "devcontainer_rebuild",
     null,
   );
+  editor.registerCommand(
+    "%cmd.attach",
+    "%cmd.attach_desc",
+    "devcontainer_attach",
+    null,
+  );
+  editor.registerCommand(
+    "%cmd.detach",
+    "%cmd.detach_desc",
+    "devcontainer_detach",
+    null,
+  );
 }
 
 // =============================================================================
@@ -891,6 +1062,16 @@ if (findConfig()) {
   );
 
   editor.debug("Dev Container plugin initialized: " + name);
+
+  // One-shot per-workspace attach prompt. If the user has already
+  // decided for this workspace (attached = yes, dismissed = no),
+  // don't bug them again. Deliberate: no automatic silent attach —
+  // attaching is a destructive transition (the editor restarts) so
+  // the user always explicitly opts in.
+  const previousDecision = readAttachDecision();
+  if (previousDecision === null) {
+    showAttachPrompt();
+  }
 } else {
   editor.debug("Dev Container plugin: no devcontainer.json found");
 }
