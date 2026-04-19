@@ -1204,6 +1204,7 @@ impl Editor {
             Some(backing_path.clone()),
             self.container_id.clone(),
             self.container_user.clone(),
+            self.container_workspace.clone(),
         ) {
             Ok(id) => id,
             Err(e) => {
