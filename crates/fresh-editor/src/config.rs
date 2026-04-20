@@ -844,6 +844,15 @@ pub struct EditorConfig {
     #[schemars(extend("x-section" = "Display"))]
     pub use_terminal_bg: bool,
 
+    /// Update the terminal window title (via OSC 2) to reflect the active buffer.
+    /// When enabled, Fresh sets the terminal/tab title to "<file> — Fresh" as
+    /// you switch buffers. Harmless on terminals that don't understand the
+    /// escape sequence — they silently ignore it.
+    /// Default: true
+    #[serde(default = "default_true")]
+    #[schemars(extend("x-section" = "Display"))]
+    pub set_window_title: bool,
+
     /// Cursor style for the terminal cursor.
     /// Options: blinking_block, steady_block, blinking_bar, steady_bar, blinking_underline, steady_underline
     /// Default: blinking_block
@@ -1356,6 +1365,7 @@ impl Default for EditorConfig {
             show_horizontal_scrollbar: false,
             show_tilde: true,
             use_terminal_bg: false,
+            set_window_title: true,
             rulers: Vec::new(),
             whitespace_show: true,
             whitespace_spaces_leading: false,

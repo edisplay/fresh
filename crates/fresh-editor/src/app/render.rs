@@ -572,6 +572,12 @@ impl Editor {
             .get(&self.active_buffer())
             .map(|m| m.display_name.clone())
             .unwrap_or_else(|| "[No Name]".to_string());
+
+        // Reflect the active buffer in the terminal window/tab title. Only
+        // writes when the title actually changes so we don't flood stdout
+        // with OSC sequences every frame.
+        self.update_terminal_title(&display_name);
+
         let status_message = self.status_message.clone();
         let plugin_status_message = self.plugin_status_message.clone();
         let prompt = self.prompt.clone();
@@ -1590,6 +1596,24 @@ impl Editor {
         if let Some(history) = self.prompt_histories.get_mut("search") {
             history.clear();
         }
+    }
+
+    /// Emit an OSC 2 escape sequence to set the host terminal's window/tab
+    /// title based on the active buffer's display name. Deduplicated against
+    /// the last title we wrote so we don't spam stdout every frame.
+    ///
+    /// Gated by `editor.set_window_title` (default on). Terminals that
+    /// don't implement OSC 2 silently drop the sequence.
+    fn update_terminal_title(&mut self, display_name: &str) {
+        if !self.config.editor.set_window_title {
+            return;
+        }
+        let new_title = format!("{} \u{2014} Fresh", display_name);
+        if self.last_window_title.as_deref() == Some(new_title.as_str()) {
+            return;
+        }
+        crate::services::terminal_title::write_terminal_title(&new_title);
+        self.last_window_title = Some(new_title);
     }
 
     /// Save all prompt histories to disk

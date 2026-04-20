@@ -410,6 +410,11 @@ pub struct Editor {
     /// Plugin-provided status message (displayed alongside the core status)
     plugin_status_message: Option<String>,
 
+    /// Last terminal window title written via OSC 2. Used so we only write
+    /// the escape sequence when the title would actually change, rather
+    /// than on every frame.
+    last_window_title: Option<String>,
+
     /// Accumulated plugin errors (for test assertions)
     /// These are collected when plugin error messages are received
     plugin_errors: Vec<String>,

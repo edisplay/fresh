@@ -556,6 +556,7 @@ impl Editor {
             restart_with_dir: None,
             status_message: None,
             plugin_status_message: None,
+            last_window_title: None,
             plugin_errors: Vec::new(),
             prompt: None,
             terminal_width: width,
