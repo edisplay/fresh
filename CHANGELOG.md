@@ -1,5 +1,59 @@
 # Release Notes
 
+## 0.2.26
+
+### Features
+
+* **`init.ts`**: Fresh now auto-loads `~/.config/fresh/init.ts`! Allows you to run plugin code on startup, which complements the purely declarative config system with imperative, environment-aware logic. Use command palette `init: Edit` to generate a template with some examples. Enable LSP to get help and completions when editing your init file. Use `init: Reload` to run it after editing. Use `--no-init` / `--safe` to skip loading.
+
+* **Dashboard plugin**: Built-in TUI dashboard that replaces the usual "[No Name]" with weather info, git status + repo URL, a "vs master" row (commits ahead/behind), recent GitHub PRs, and disk usage for common mounts. Opt in from `init.ts` (see the generated init example).
+
+* **Devcontainer support**: Detects `.devcontainer/devcontainer.json` and offers Attach / Rebuild via the [devcontainer CLI](https://github.com/devcontainers/cli), which you need to install. Embedded terminal runs inside the devcontainer.
+
+### Improvements
+
+* **SSH URLs on the CLI**: `fresh ssh://user@host:port/path` launches a session whose filesystem and process authority point at the remote host.
+
+* **Redraw Screen command** (#1070): Added a `redraw_screen` action and palette entry that clears the terminal and fully repaints the UI, useful when an external program scribbles over the TUI.
+
+* **Terminal window title** (#1618): Fresh sets the terminal window title from the active buffer's filename, matching other editors.
+
+* **LSP status popup upgrades**: LSP popup now shows better options for enabling/disabling the nudge.
+
+* **Find Next centers vertically** (#1251): When the next match is off-screen, scroll it to roughly the middle of the viewport so you keep context above and below it. Matches that are already visible are not re-scrolled.
+
+* **Adaptive line-number gutter** (#1204): The gutter now grows with the buffer's line count rather than reserving 4 digits by default — a small file reclaims 2–3 columns of editor width.
+
+* **File explorer width in percent or columns** (#1118, #1212, #1213): `file_explorer.width` now accepts `"30%"` (percent of terminal width) or `"24"` (absolute columns). Dragging the divider preserves whichever form you configured. Legacy integer/fraction values keep working.
+
+* **Relative paths to theme files** (#1621): User themes in `config.json` can be spelled out as relative to your themes directory:
+  - "dark" or "builtin://dark" — any built-in by name
+  - "my-theme.json" or "subdir/dark.json" — nested relative path in your user themes dir - useful for sharing Fresh config.json in a dotfiles repo
+  - "file://${HOME}/themes/x.json" — absolute path; ${HOME}, ${XDG_CONFIG_HOME} are expanded
+  - "https://github.com/foo/themes#dark" — URL-packaged theme
+
+* **Plugin API additions**: `editor.overrideThemeColors(...)` for in-memory theme mutation, `editor.parseJsonc(...)` for host-side JSONC parsing, and plugin-created terminals now have an ephemeral lifetime (they close cleanly when the action that spawned them finishes).
+
+* **macOS Alt+Right / Option+Right stops at word end** (#1288): Selection no longer extends past trailing whitespace, matching TextEdit / VS Code on Mac.
+
+### Bug Fixes
+
+* **File Explorer `.gitignore` improvements** (#1388): Files are now visible only if they aren't hidden by ANY of the filters (hidden files, `.gitignore` files). Also, File Explorer will do a better job of auto-reloading when `.gitignore` changes.
+
+* **Scrollbar theme colours** (#1554): The scrollbar now honours `theme.scrollbar_track_fg` / `scrollbar_thumb_fg`. A few themes were updated to define this missing value.
+
+* **Fixed panic when clicking split + terminal** (#1620).
+
+* **Fixed LSP server crash loop** (#1612): When LSP fails on startup, restart bypassed the normal restart count limiter, now fixed.
+
+* **Fixed Markdown preview/compose wrapping when File Explorer is open**: When compose width was set (e.g. 80), opening the File Explorer sidebar pushed tables off the right edge. Separator rows no longer overflow when table cells are truncated.
+
+* **More settings propagate live**: File-explorer width and flag changes made in the Settings UI apply immediately on save, without a restart.
+
+### Under the Hood
+
+* **Authority abstraction**: Filesystem, process-spawning, and LSP routing are now consolidated behind a single `Authority` slot, with plugin ops (`editor.setAuthority` / `clearAuthority` / `spawnHostProcess`) for plugins that want to target the host even while attached elsewhere. This is what makes the devcontainer and `ssh://` flows work uniformly.
+
 ## 0.2.25
 
 ### Improvements
