@@ -22,6 +22,7 @@
 
 use crate::common::harness::{EditorTestHarness, HarnessOptions};
 use crossterm::event::{KeyCode, KeyModifiers};
+use fresh::config::Config;
 use fresh::model::filesystem::{
     DirEntry, FileMetadata, FilePermissions, FileReader, FileSystem, FileWriter, StdFileSystem,
 };
@@ -30,6 +31,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 // ---------------------------------------------------------------------------
 // Test filesystem: wraps StdFileSystem and can be armed to inject faults
@@ -1116,3 +1118,117 @@ fn test_paste_into_same_dir_cancels_cut() {
     );
 }
 
+/// Cut from an expanded subfolder, paste into the workspace root, then let
+/// the background directory poller run. The poller used to call
+/// `refresh_node` on any directory whose mtime changed (here: the source
+/// parent); `refresh_node` collapses the directory and recycles every
+/// descendant NodeId. Observed fallout: the source directory silently
+/// collapses after ~poll_interval, and the explorer cursor — which refers
+/// to a node by id — points at a freed id, so Up/Down become no-ops
+/// (`select_next`/`select_prev` give up when the current id isn't in
+/// `visible_nodes`).
+#[test]
+fn test_poll_after_cut_paste_preserves_expansion_and_cursor() {
+    let mut config = Config::default();
+    // Short poll interval so the test drives polling through `wait_until`
+    // without waiting seconds of wall clock.
+    config.editor.file_tree_poll_interval_ms = 50;
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(120, 30, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+    fs::create_dir(project_root.join("sub")).unwrap();
+    fs::write(project_root.join("sub/inner.txt"), "inner").unwrap();
+    // A sibling at root so `sub/` expansion stays observable after the move
+    // (the pasted file shows up at root, but "sub" should also still be listed).
+    fs::write(project_root.join("sibling.txt"), "s").unwrap();
+
+    harness.editor_mut().focus_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.wait_for_file_explorer_item("sub").unwrap();
+
+    // Cursor: root → sub/. Expand sub/ so inner.txt is visible.
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // sub/
+    harness
+        .send_key(KeyCode::Right, KeyModifiers::NONE)
+        .unwrap(); // expand sub/
+    harness.wait_for_file_explorer_item("inner.txt").unwrap();
+
+    // Move cursor onto inner.txt and cut it.
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // inner.txt
+    harness
+        .send_key(KeyCode::Char('x'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Paste into the workspace root: move cursor up past sub/ to the root
+    // line, then Ctrl+V. dst_dir = root.
+    harness.send_key(KeyCode::Up, KeyModifiers::NONE).unwrap(); // sub/
+    harness.send_key(KeyCode::Up, KeyModifiers::NONE).unwrap(); // root
+    harness
+        .send_key(KeyCode::Char('v'), KeyModifiers::CONTROL)
+        .unwrap();
+
+    // Wait until the paste has landed on disk AND is reflected on screen.
+    let moved_src = project_root.join("sub/inner.txt");
+    let moved_dst = project_root.join("inner.txt");
+    harness
+        .wait_until(|h| {
+            !moved_src.exists() && moved_dst.exists() && h.screen_to_string().contains("inner.txt")
+        })
+        .unwrap();
+
+    // Confirm `sub/` is still rendered as expanded right after the paste.
+    let right_after = harness.screen_to_string();
+    assert!(
+        right_after.lines().any(|l| l.contains("▼ sub")),
+        "sub/ should still be expanded immediately after paste. Screen:\n{}",
+        right_after
+    );
+
+    // Now let the background directory poll fire. Advance logical time past
+    // the poll interval and tick the harness until the poll has completed
+    // at least one full cycle (spawn bg thread → receive results → process).
+    harness.advance_time(Duration::from_millis(200));
+    // Give the bg poll-dir-changes thread a couple of ticks to run and
+    // deliver its results.
+    for _ in 0..20 {
+        harness.editor_mut().process_async_messages();
+        std::thread::sleep(Duration::from_millis(20));
+        harness.advance_time(Duration::from_millis(100));
+    }
+    harness.render().unwrap();
+
+    let after_poll = harness.screen_to_string();
+
+    // sub/ must still be rendered expanded. The bug shows up here: a stale
+    // mtime triggers refresh_node, which collapses sub/ (so the line would
+    // render as "> sub" instead).
+    assert!(
+        after_poll.lines().any(|l| l.contains("▼ sub")),
+        "After the background poll, sub/ must remain expanded. Screen:\n{}",
+        after_poll
+    );
+
+    // Cursor navigation must still work. Before the fix, select_next /
+    // select_prev silently no-op when the cursor's NodeId was recycled by
+    // refresh_node. Drive Down once and verify the selection actually
+    // changed — i.e. the cursor is still live, not stuck on a ghost id.
+    let before_nav = harness
+        .editor()
+        .file_explorer()
+        .and_then(|e| e.get_selected())
+        .expect("explorer should still have a live selection after poll");
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+    let after_nav = harness
+        .editor()
+        .file_explorer()
+        .and_then(|e| e.get_selected())
+        .expect("explorer should still have a live selection after arrow-down");
+    assert_ne!(
+        before_nav, after_nav,
+        "Arrow-down must move the cursor. If the poll invalidated the \
+         cursor's NodeId, select_next silently no-ops and the selection \
+         stays put."
+    );
+}

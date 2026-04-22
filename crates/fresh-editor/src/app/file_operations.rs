@@ -687,16 +687,44 @@ impl Editor {
 
         // Refresh each changed directory and (re)load its .gitignore. A new
         // .gitignore file inside an expanded dir bumps the dir's mtime so we
-        // land here; refresh_node re-lists entries but doesn't parse rules —
-        // load_gitignore_via_fs handles the rules side. Idempotent when the
-        // dir has no .gitignore.
+        // land here; reload_expanded_node re-lists entries but doesn't parse
+        // rules — load_gitignore_via_fs handles the rules side.
+        //
+        // Why reload_expanded_node and not refresh_node: refresh_node
+        // collapses the directory and re-expands it, which recycles every
+        // descendant NodeId and drops their expansion state. That's fatal
+        // for this code path, which runs unprompted from a background
+        // timer: after a cut+paste into the workspace root, the source
+        // parent's mtime changes, we land here seconds later, and
+        // refresh_node would collapse a user-expanded subtree and
+        // invalidate the cursor NodeId (after which Up/Down become no-ops
+        // because select_next/select_prev can't find the current id in
+        // the visible list).
+        //
+        // We also snapshot the cursor path before the reload and
+        // re-resolve it afterwards, because reload_expanded_node still
+        // recycles ids under the refreshed root — the path survives even
+        // when the id doesn't.
         let refreshed_dirs: Vec<PathBuf> = dirs_to_refresh.iter().map(|(_, p)| p.clone()).collect();
         if let (Some(runtime), Some(explorer)) = (&self.tokio_runtime, &mut self.file_explorer) {
-            for (node_id, _) in dirs_to_refresh {
+            let cursor_path: Option<PathBuf> =
+                explorer.get_selected_entry().map(|e| e.path.clone());
+            // Re-resolve node ids by path at each step: an earlier
+            // reload_expanded_node in this loop may have recycled ids
+            // under its subtree, so the ids captured in the background
+            // poll can be stale.
+            for (_stale_id, path) in dirs_to_refresh {
+                let id_now = explorer.tree().get_node_by_path(&path).map(|n| n.id);
+                let Some(id_now) = id_now else {
+                    continue;
+                };
                 let tree = explorer.tree_mut();
-                if let Err(e) = runtime.block_on(tree.refresh_node(node_id)) {
+                if let Err(e) = runtime.block_on(tree.reload_expanded_node(id_now)) {
                     tracing::warn!("Failed to refresh directory: {}", e);
                 }
+            }
+            if let Some(path) = cursor_path {
+                explorer.navigate_to_path(&path);
             }
         }
         let fs = self.authority.filesystem.clone();
