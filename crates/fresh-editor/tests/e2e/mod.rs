@@ -128,6 +128,7 @@ pub mod position_history;
 pub mod position_history_bugs;
 pub mod position_history_debug;
 pub mod position_history_truncate_debug;
+pub mod preview_lsp_popup_focus;
 pub mod preview_tabs;
 pub mod prompt;
 pub mod prompt_editing;
