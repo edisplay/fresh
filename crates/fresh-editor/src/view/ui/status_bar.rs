@@ -412,9 +412,13 @@ pub fn truncate_path(path: &Path, max_len: usize) -> TruncatedPath {
     let available_for_suffix = max_len.saturating_sub(prefix.len() + ellipsis_len);
 
     if available_for_suffix < 5 || components.len() <= 1 {
-        // Not enough space or only one component, just truncate the end
+        // Not enough space or only one component, just truncate the end.
+        // Walk back to a char boundary so paths with non-ASCII components
+        // (e.g. `/home/ユーザー/project`) don't byte-slice through a
+        // multi-byte UTF-8 sequence and panic (same class as #1718).
         let truncated_path = if path_str.len() > max_len.saturating_sub(3) {
-            format!("{}...", &path_str[..max_len.saturating_sub(3)])
+            let cut = path_str.floor_char_boundary(max_len.saturating_sub(3));
+            format!("{}...", &path_str[..cut])
         } else {
             path_str.to_string()
         };
@@ -451,11 +455,14 @@ pub fn truncate_path(path: &Path, max_len: usize) -> TruncatedPath {
     }
 
     let suffix = if suffix_parts.is_empty() {
-        // Can't fit any suffix components, truncate the last component
+        // Can't fit any suffix components, truncate the last component.
+        // floor_char_boundary keeps the slice on a valid UTF-8 boundary
+        // when `last` contains non-ASCII characters.
         let last = components.last().unwrap_or(&"");
         let truncate_to = available_for_suffix.saturating_sub(4); // "/.." and some chars
         if truncate_to > 0 && last.len() > truncate_to {
-            format!("/{}...", &last[..truncate_to])
+            let cut = last.floor_char_boundary(truncate_to);
+            format!("/{}...", &last[..cut])
         } else {
             format!("/{}", last)
         }
@@ -1670,6 +1677,34 @@ mod tests {
 
         assert!(!result.truncated);
         assert_eq!(result.suffix, "/");
+    }
+
+    #[test]
+    fn test_truncate_path_multibyte_single_component_does_not_panic() {
+        // Routes into the "truncate the end" branch (line 414): the prefix
+        // alone exceeds max_len, so available_for_suffix becomes 0. Before
+        // the fix, byte-slicing `path_str` at `max_len - 3 = 2` lands
+        // inside the 3-byte UTF-8 sequence for `ユ` and panicked the
+        // editor — same class as #1718.
+        let path = PathBuf::from("/ユーザーのプロジェクト名前/file");
+        let result = truncate_path(&path, 5);
+        let display = result.to_string_plain();
+        assert!(display.is_char_boundary(display.len()));
+        assert!(display.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_path_multibyte_last_component_does_not_panic() {
+        // Routes into the "truncate the last component" branch (line 453):
+        // available_for_suffix is large enough to enter the suffix-build
+        // loop, but the only remaining component doesn't fit, so we fall
+        // back to truncating it. Before the fix, byte-slicing the
+        // non-ASCII component at `truncate_to = 1` lands inside the 3-byte
+        // UTF-8 sequence for `ユ` and panicked.
+        let path = PathBuf::from("/a/ユーザーのプロジェクト名前");
+        let result = truncate_path(&path, 13);
+        let display = result.to_string_plain();
+        assert!(display.is_char_boundary(display.len()));
     }
 
     #[test]
