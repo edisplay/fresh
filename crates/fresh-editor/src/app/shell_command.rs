@@ -318,11 +318,52 @@ fn detect_shell() -> String {
 }
 
 /// Truncate a command string for display purposes.
+///
+/// Counts characters (not bytes) so non-ASCII commands like
+/// `echo こんにちは` don't byte-slice through the middle of a multi-byte
+/// UTF-8 sequence and panic.
 fn truncate_command(command: &str, max_len: usize) -> String {
     let trimmed = command.trim();
-    if trimmed.len() <= max_len {
+    if trimmed.chars().count() <= max_len {
         trimmed.to_string()
     } else {
-        format!("{}...", &trimmed[..max_len - 3])
+        let keep = max_len.saturating_sub(3);
+        let kept: String = trimmed.chars().take(keep).collect();
+        format!("{}...", kept)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_command;
+
+    #[test]
+    fn truncate_command_ascii_fits() {
+        assert_eq!(truncate_command("echo hi", 30), "echo hi");
+    }
+
+    #[test]
+    fn truncate_command_ascii_truncates() {
+        assert_eq!(truncate_command("echo hello world", 10), "echo he...");
+    }
+
+    #[test]
+    fn truncate_command_multibyte_does_not_panic() {
+        // Regression: byte-slicing this command at `max_len - 3 = 7` lands
+        // inside the 3-byte UTF-8 sequence for 'こ' and previously panicked
+        // (same class as #1718). Now `keep = 7` characters are kept.
+        let cmd = "echo こんにちは世界";
+        let out = truncate_command(cmd, 10);
+        assert_eq!(out, "echo こん...");
+    }
+
+    #[test]
+    fn truncate_command_emoji_does_not_panic() {
+        // Regression: emoji is 4 UTF-8 bytes per code point; byte slicing
+        // at any byte index that isn't a multiple of 4 (mod the leading
+        // ASCII run) would panic.
+        let cmd = "echo 😀😀😀😀😀😀";
+        let out = truncate_command(cmd, 8);
+        assert_eq!(out, "echo ...");
     }
 }
