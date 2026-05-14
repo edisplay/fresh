@@ -39,7 +39,13 @@
     "panel.matches_title": "Matches",
     "prompt.confirm_replace": "Replace %{count} match(es) in %{files} file(s)? Undo only covers files still open in this session. Press Enter to confirm, Esc to cancel.",
     "status.replace_cancelled": "Replacement cancelled",
-    "panel.searching": "Searching…"
+    "panel.searching": "Searching…",
+    "cmd.search_replace_in_buffer": "Search and Replace in Current File",
+    "cmd.search_replace_in_buffer_desc": "Search and replace text in only the active file",
+    "panel.all_files_toggle": "All Files",
+    "panel.scope_row_file": "Only in: %{file}",
+    "panel.scope_row_unnamed": "Only in: (unsaved buffer)",
+    "panel.replace_all_in_file_btn": "Replace All in %{file} (Alt+Ret)"
   },
   "cs": {
     "cmd.search_replace": "Hledat a nahradit v projektu",
@@ -81,7 +87,13 @@
     "panel.matches_title": "Shody",
     "prompt.confirm_replace": "Nahradit %{count} výskyt(ů) v %{files} souboru(ech)? Vrátit zpět lze jen soubory otevřené v této relaci. Enter potvrdí, Esc zruší.",
     "status.replace_cancelled": "Nahrazení zrušeno",
-    "panel.searching": "Hledání…"
+    "panel.searching": "Hledání…",
+    "cmd.search_replace_in_buffer": "Hledat a nahradit v aktuálním souboru",
+    "cmd.search_replace_in_buffer_desc": "Hledat a nahradit text pouze v aktivním souboru",
+    "panel.all_files_toggle": "Všechny soubory",
+    "panel.scope_row_file": "Pouze v: %{file}",
+    "panel.scope_row_unnamed": "Pouze v: (neuložený buffer)",
+    "panel.replace_all_in_file_btn": "Nahradit vše v %{file} (Alt+Ret)"
   },
   "de": {
     "cmd.search_replace": "Suchen und Ersetzen im Projekt",
@@ -123,7 +135,13 @@
     "panel.matches_title": "Treffer",
     "prompt.confirm_replace": "%{count} Treffer in %{files} Datei(en) ersetzen? Rückgängig wirkt nur auf Dateien, die in dieser Sitzung geöffnet sind. Enter bestätigt, Esc bricht ab.",
     "status.replace_cancelled": "Ersetzen abgebrochen",
-    "panel.searching": "Suche…"
+    "panel.searching": "Suche…",
+    "cmd.search_replace_in_buffer": "Suchen und Ersetzen in aktueller Datei",
+    "cmd.search_replace_in_buffer_desc": "Text nur in der aktiven Datei suchen und ersetzen",
+    "panel.all_files_toggle": "Alle Dateien",
+    "panel.scope_row_file": "Nur in: %{file}",
+    "panel.scope_row_unnamed": "Nur in: (ungespeicherter Puffer)",
+    "panel.replace_all_in_file_btn": "Alle in %{file} ersetzen (Alt+Ret)"
   },
   "es": {
     "cmd.search_replace": "Buscar y Reemplazar en Proyecto",
@@ -165,7 +183,13 @@
     "panel.matches_title": "Coincidencias",
     "prompt.confirm_replace": "¿Reemplazar %{count} coincidencia(s) en %{files} archivo(s)? Deshacer solo cubre los archivos abiertos en esta sesión. Intro confirma, Esc cancela.",
     "status.replace_cancelled": "Reemplazo cancelado",
-    "panel.searching": "Buscando…"
+    "panel.searching": "Buscando…",
+    "cmd.search_replace_in_buffer": "Buscar y reemplazar en archivo actual",
+    "cmd.search_replace_in_buffer_desc": "Buscar y reemplazar texto solo en el archivo activo",
+    "panel.all_files_toggle": "Todos los archivos",
+    "panel.scope_row_file": "Solo en: %{file}",
+    "panel.scope_row_unnamed": "Solo en: (buffer sin guardar)",
+    "panel.replace_all_in_file_btn": "Reemplazar todo en %{file} (Alt+Ret)"
   },
   "fr": {
     "cmd.search_replace": "Rechercher et Remplacer dans le Projet",
@@ -207,7 +231,13 @@
     "panel.matches_title": "Correspondances",
     "prompt.confirm_replace": "Remplacer %{count} correspondance(s) dans %{files} fichier(s) ? L'annulation ne concerne que les fichiers ouverts dans cette session. Entrée confirme, Échap annule.",
     "status.replace_cancelled": "Remplacement annulé",
-    "panel.searching": "Recherche en cours…"
+    "panel.searching": "Recherche en cours…",
+    "cmd.search_replace_in_buffer": "Rechercher et remplacer dans le fichier courant",
+    "cmd.search_replace_in_buffer_desc": "Rechercher et remplacer du texte uniquement dans le fichier actif",
+    "panel.all_files_toggle": "Tous les fichiers",
+    "panel.scope_row_file": "Seulement dans : %{file}",
+    "panel.scope_row_unnamed": "Seulement dans : (tampon non enregistré)",
+    "panel.replace_all_in_file_btn": "Tout remplacer dans %{file} (Alt+Ret)"
   },
   "it": {
     "cmd.search_replace": "Cerca e sostituisci nel progetto",
@@ -249,7 +279,13 @@
     "panel.matches_title": "Corrispondenze",
     "prompt.confirm_replace": "Sostituire %{count} corrispondenza/e in %{files} file? L'annulla copre solo i file aperti in questa sessione. Invio conferma, Esc annulla.",
     "status.replace_cancelled": "Sostituzione annullata",
-    "panel.searching": "Ricerca in corso…"
+    "panel.searching": "Ricerca in corso…",
+    "cmd.search_replace_in_buffer": "Cerca e sostituisci nel file corrente",
+    "cmd.search_replace_in_buffer_desc": "Cerca e sostituisci testo solo nel file attivo",
+    "panel.all_files_toggle": "Tutti i file",
+    "panel.scope_row_file": "Solo in: %{file}",
+    "panel.scope_row_unnamed": "Solo in: (buffer non salvato)",
+    "panel.replace_all_in_file_btn": "Sostituisci tutto in %{file} (Alt+Ret)"
   },
   "ja": {
     "cmd.search_replace": "プロジェクト内で検索と置換",
@@ -291,7 +327,13 @@
     "panel.matches_title": "一致",
     "prompt.confirm_replace": "%{files} 個のファイルで %{count} 件の一致を置換しますか？元に戻せるのはこのセッションで開いているファイルのみです。Enterで確認、Escでキャンセル。",
     "status.replace_cancelled": "置換がキャンセルされました",
-    "panel.searching": "検索中…"
+    "panel.searching": "検索中…",
+    "cmd.search_replace_in_buffer": "現在のファイルで検索と置換",
+    "cmd.search_replace_in_buffer_desc": "アクティブなファイル内でのみテキストを検索および置換",
+    "panel.all_files_toggle": "全ファイル",
+    "panel.scope_row_file": "対象: %{file}",
+    "panel.scope_row_unnamed": "対象: (未保存バッファ)",
+    "panel.replace_all_in_file_btn": "%{file} 内ですべて置換 (Alt+Ret)"
   },
   "ko": {
     "cmd.search_replace": "프로젝트에서 검색 및 바꾸기",
@@ -333,7 +375,13 @@
     "panel.matches_title": "일치",
     "prompt.confirm_replace": "%{files}개 파일에서 %{count}개 일치를 바꾸시겠습니까? 실행 취소는 이 세션에서 열려 있는 파일에만 적용됩니다. Enter 확인, Esc 취소.",
     "status.replace_cancelled": "바꾸기가 취소됨",
-    "panel.searching": "검색 중…"
+    "panel.searching": "검색 중…",
+    "cmd.search_replace_in_buffer": "현재 파일에서 찾기 및 바꾸기",
+    "cmd.search_replace_in_buffer_desc": "활성 파일에서만 텍스트를 찾고 바꾸기",
+    "panel.all_files_toggle": "모든 파일",
+    "panel.scope_row_file": "범위: %{file}",
+    "panel.scope_row_unnamed": "범위: (저장되지 않은 버퍼)",
+    "panel.replace_all_in_file_btn": "%{file} 에서 모두 바꾸기 (Alt+Ret)"
   },
   "pt-BR": {
     "cmd.search_replace": "Pesquisar e Substituir no Projeto",
@@ -375,7 +423,13 @@
     "panel.matches_title": "Correspondências",
     "prompt.confirm_replace": "Substituir %{count} ocorrência(s) em %{files} arquivo(s)? Desfazer só cobre arquivos abertos nesta sessão. Enter confirma, Esc cancela.",
     "status.replace_cancelled": "Substituição cancelada",
-    "panel.searching": "Pesquisando…"
+    "panel.searching": "Pesquisando…",
+    "cmd.search_replace_in_buffer": "Pesquisar e substituir no arquivo atual",
+    "cmd.search_replace_in_buffer_desc": "Pesquisar e substituir texto apenas no arquivo ativo",
+    "panel.all_files_toggle": "Todos os arquivos",
+    "panel.scope_row_file": "Somente em: %{file}",
+    "panel.scope_row_unnamed": "Somente em: (buffer não salvo)",
+    "panel.replace_all_in_file_btn": "Substituir tudo em %{file} (Alt+Ret)"
   },
   "ru": {
     "cmd.search_replace": "Поиск и замена в проекте",
@@ -417,7 +471,13 @@
     "panel.matches_title": "Совпадения",
     "prompt.confirm_replace": "Заменить %{count} совпадений в %{files} файлах? Отмена применяется только к файлам, открытым в этом сеансе. Enter — подтвердить, Esc — отменить.",
     "status.replace_cancelled": "Замена отменена",
-    "panel.searching": "Поиск…"
+    "panel.searching": "Поиск…",
+    "cmd.search_replace_in_buffer": "Поиск и замена в текущем файле",
+    "cmd.search_replace_in_buffer_desc": "Поиск и замена текста только в активном файле",
+    "panel.all_files_toggle": "Все файлы",
+    "panel.scope_row_file": "Только в: %{file}",
+    "panel.scope_row_unnamed": "Только в: (несохранённый буфер)",
+    "panel.replace_all_in_file_btn": "Заменить все в %{file} (Alt+Ret)"
   },
   "th": {
     "cmd.search_replace": "ค้นหาและแทนที่ในโปรเจกต์",
@@ -459,7 +519,13 @@
     "panel.matches_title": "รายการที่ตรงกัน",
     "prompt.confirm_replace": "แทนที่ %{count} รายการใน %{files} ไฟล์? เลิกทำครอบคลุมเฉพาะไฟล์ที่เปิดอยู่ในเซสชันนี้เท่านั้น กด Enter เพื่อยืนยัน, Esc เพื่อยกเลิก",
     "status.replace_cancelled": "ยกเลิกการแทนที่",
-    "panel.searching": "กำลังค้นหา…"
+    "panel.searching": "กำลังค้นหา…",
+    "cmd.search_replace_in_buffer": "ค้นหาและแทนที่ในไฟล์ปัจจุบัน",
+    "cmd.search_replace_in_buffer_desc": "ค้นหาและแทนที่ข้อความเฉพาะในไฟล์ที่ใช้งาน",
+    "panel.all_files_toggle": "ไฟล์ทั้งหมด",
+    "panel.scope_row_file": "เฉพาะใน: %{file}",
+    "panel.scope_row_unnamed": "เฉพาะใน: (บัฟเฟอร์ที่ยังไม่ได้บันทึก)",
+    "panel.replace_all_in_file_btn": "แทนที่ทั้งหมดใน %{file} (Alt+Ret)"
   },
   "uk": {
     "cmd.search_replace": "Пошук та заміна в проекті",
@@ -501,7 +567,13 @@
     "panel.matches_title": "Збіги",
     "prompt.confirm_replace": "Замінити %{count} збіг(ів) у %{files} файл(ах)? Скасування охоплює лише файли, відкриті в цьому сеансі. Enter — підтвердити, Esc — скасувати.",
     "status.replace_cancelled": "Заміну скасовано",
-    "panel.searching": "Пошук…"
+    "panel.searching": "Пошук…",
+    "cmd.search_replace_in_buffer": "Пошук і заміна у поточному файлі",
+    "cmd.search_replace_in_buffer_desc": "Пошук і заміна тексту лише в активному файлі",
+    "panel.all_files_toggle": "Усі файли",
+    "panel.scope_row_file": "Лише в: %{file}",
+    "panel.scope_row_unnamed": "Лише в: (незбережений буфер)",
+    "panel.replace_all_in_file_btn": "Замінити все в %{file} (Alt+Ret)"
   },
   "vi": {
     "cmd.search_replace": "Tìm và Thay thế trong Dự án",
@@ -543,7 +615,13 @@
     "panel.matches_title": "Kết quả",
     "prompt.confirm_replace": "Thay thế %{count} kết quả trong %{files} tệp? Hoàn tác chỉ áp dụng cho các tệp đang mở trong phiên này. Enter để xác nhận, Esc để hủy.",
     "status.replace_cancelled": "Đã hủy thay thế",
-    "panel.searching": "Đang tìm kiếm…"
+    "panel.searching": "Đang tìm kiếm…",
+    "cmd.search_replace_in_buffer": "Tìm và thay thế trong tệp hiện tại",
+    "cmd.search_replace_in_buffer_desc": "Tìm và thay thế văn bản chỉ trong tệp đang mở",
+    "panel.all_files_toggle": "Tất cả tệp",
+    "panel.scope_row_file": "Chỉ trong: %{file}",
+    "panel.scope_row_unnamed": "Chỉ trong: (bộ đệm chưa lưu)",
+    "panel.replace_all_in_file_btn": "Thay thế tất cả trong %{file} (Alt+Ret)"
   },
   "zh-CN": {
     "cmd.search_replace": "在项目中搜索和替换",
@@ -585,6 +663,12 @@
     "panel.matches_title": "匹配",
     "prompt.confirm_replace": "在 %{files} 个文件中替换 %{count} 处匹配？撤销仅适用于本次会话中打开的文件。按 Enter 确认，Esc 取消。",
     "status.replace_cancelled": "替换已取消",
-    "panel.searching": "正在搜索…"
+    "panel.searching": "正在搜索…",
+    "cmd.search_replace_in_buffer": "在当前文件中查找和替换",
+    "cmd.search_replace_in_buffer_desc": "仅在活动文件中查找和替换文本",
+    "panel.all_files_toggle": "所有文件",
+    "panel.scope_row_file": "仅在: %{file}",
+    "panel.scope_row_unnamed": "仅在: (未保存的缓冲区)",
+    "panel.replace_all_in_file_btn": "在 %{file} 中全部替换 (Alt+Ret)"
   }
 }

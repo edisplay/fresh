@@ -68,6 +68,16 @@ interface PanelState {
   caseSensitive: boolean;
   useRegex: boolean;
   wholeWords: boolean;
+  // Scope (§1): when false, results are restricted to `sourceBufferPath`.
+  // `sourceBufferPath` is the absolute path of the buffer that was
+  // active when the panel opened; `sourceBufferRelPath` is the
+  // cwd-relative display form. Empty path means the source buffer was
+  // unsaved/virtual; in that case the "current file" mode degrades to
+  // "no matches" and the toggle visually still flips, but the user
+  // can't usefully restrict to an unnamed buffer.
+  allFiles: boolean;
+  sourceBufferPath: string;
+  sourceBufferRelPath: string;
   // Layout
   viewportWidth: number;
   // State
@@ -379,22 +389,31 @@ function getViewportHeight(): number {
 // theme keys, and focus affordance match every other plugin.
 function buildOptionsRowSpec(): WidgetSpec {
   if (!panel) return col();
-  const { focusPanel, optionIndex, caseSensitive, useRegex, wholeWords } = panel;
+  const { focusPanel, optionIndex, caseSensitive, useRegex, wholeWords, allFiles } = panel;
   const W = Math.max(MIN_WIDTH, panel.viewportWidth - 2);
   const oFocus = focusPanel === "options";
 
-  // The flex Spacer fills whatever's left of the row so the
-  // "Replace All" button right-aligns regardless of label width or
-  // panel width. No more byteLen-summing of labels.
   const caseLabel = editor.t("panel.case_toggle");
   const regexLabel = editor.t("panel.regex_toggle");
   const wholeLabel = editor.t("panel.whole_toggle");
-  const replLabel = editor.t("panel.replace_all_btn");
+  const allFilesLabel = editor.t("panel.all_files_toggle");
+  // Replace All button label tracks scope (§1):
+  //   * allFiles=true  → "Replace All (Alt+Ret)"
+  //   * allFiles=false → "Replace All in <file> (Alt+Ret)"
+  // sourceBufferRelPath is empty for an unsaved buffer, in which
+  // case we fall back to the all-files label since restricting to
+  // a path-less buffer can't match anything anyway.
+  const replLabel = (!allFiles && panel.sourceBufferRelPath)
+    ? editor.t("panel.replace_all_in_file_btn", { file: panel.sourceBufferRelPath })
+    : editor.t("panel.replace_all_btn");
   void oFocus;
   void optionIndex;
+  void W;
 
   return row(
     spacer(1),
+    toggle(allFiles, allFilesLabel, { key: "allFiles" }),
+    spacer(2),
     toggle(caseSensitive, caseLabel, { key: "case" }),
     spacer(2),
     toggle(useRegex, regexLabel, { key: "regex" }),
@@ -403,6 +422,22 @@ function buildOptionsRowSpec(): WidgetSpec {
     flexSpacer(),
     button(replLabel, { intent: "primary", key: "replaceAll" }),
   );
+}
+
+// Build the scope-info row shown only when allFiles=false. Tells the
+// user which single file the search is restricted to. When allFiles=true
+// the function returns an empty col() (the spec composer skips it).
+function buildScopeRowSpec(): WidgetSpec {
+  if (!panel) return col();
+  if (panel.allFiles) return col();
+  const label = panel.sourceBufferRelPath
+    ? editor.t("panel.scope_row_file", { file: panel.sourceBufferRelPath })
+    : editor.t("panel.scope_row_unnamed");
+  return raw([{
+    text: " " + label,
+    properties: { type: "scope-row" },
+    style: { fg: C.label, italic: true },
+  }]);
 }
 
 // Build the typed Row spec for line 1 (search + replace fields with
@@ -868,6 +903,7 @@ function updatePanelContent(): void {
     col(
       buildLine1Spec(),
       buildOptionsRowSpec(),
+      buildScopeRowSpec(),
       raw(buildPanelEntries("postOptions")),
       buildMatchListSpec(),
       hintBar(buildHelpHints()),
@@ -953,6 +989,11 @@ async function performSearch(pattern: string, silent?: boolean): Promise<SearchR
       const batch = handle.take();
       if (batch.matches.length > 0) {
         for (const m of batch.matches) {
+          // §1 scope filter: when scope is "current file only", drop
+          // matches from any other path. Done client-side because the
+          // host grep API is project-wide. Empty sourceBufferPath
+          // (unsaved buffer) filters everything out by design.
+          if (!panel.allFiles && m.file !== panel.sourceBufferPath) continue;
           allResults.push({ match: m, selected: true });
         }
         panel.searchResults = allResults;
@@ -1011,30 +1052,40 @@ async function performSearch(pattern: string, silent?: boolean): Promise<SearchR
 // Panel lifecycle
 // =============================================================================
 
-async function openPanel(): Promise<void> {
+async function openPanel(opts?: { allFiles?: boolean }): Promise<void> {
   // Try to pre-fill search from editor selection
   let prefill = "";
+  let sourceBufferPath = "";
   try {
+    const activeId = editor.getActiveBufferId();
+    sourceBufferPath = editor.getBufferPath(activeId) || "";
     const cursor = editor.getPrimaryCursor();
     if (cursor && cursor.selection) {
       const start = Math.min(cursor.selection.start, cursor.selection.end);
       const end = Math.max(cursor.selection.start, cursor.selection.end);
       if (end - start > 0 && end - start < 200) {
-        const bufferId = editor.getActiveBufferId();
-        const text = await editor.getBufferText(bufferId, start, end);
+        const text = await editor.getBufferText(activeId, start, end);
         if (text && !text.includes("\n")) {
           prefill = text;
         }
       }
     }
-  } catch (_e) { /* no selection */ }
+  } catch (_e) { /* no selection / no buffer */ }
+
+  const allFiles = opts?.allFiles ?? true;
+  const sourceBufferRelPath = sourceBufferPath ? getRelativePath(sourceBufferPath) : "";
 
   if (panel) {
     panel.focusPanel = "query";
     panel.queryField = "search";
     if (prefill) panel.searchPattern = prefill;
     panel.cursorPos = panel.searchPattern.length;
+    // Re-opening from a different file/scope refreshes scope context.
+    panel.allFiles = allFiles;
+    panel.sourceBufferPath = sourceBufferPath;
+    panel.sourceBufferRelPath = sourceBufferRelPath;
     updatePanelContent();
+    if (panel.searchPattern) rerunSearchDebounced();
     return;
   }
 
@@ -1055,6 +1106,9 @@ async function openPanel(): Promise<void> {
     caseSensitive: false,
     useRegex: false,
     wholeWords: false,
+    allFiles,
+    sourceBufferPath,
+    sourceBufferRelPath,
     viewportWidth: DEFAULT_WIDTH,
     busy: false,
     searchPerformed: false,
@@ -1456,6 +1510,14 @@ function start_search_replace(): void {
 }
 registerHandler("start_search_replace", start_search_replace);
 
+// §1: open the panel with scope already restricted to the active
+// buffer. Useful when the user wants single-file search/replace from
+// the keymap without flipping the toggle by hand.
+function start_search_replace_in_buffer(): void {
+  openPanel({ allFiles: false });
+}
+registerHandler("start_search_replace_in_buffer", start_search_replace_in_buffer);
+
 // =============================================================================
 // Event handlers (resize updates width)
 // =============================================================================
@@ -1645,6 +1707,18 @@ editor.on("widget_event", (args) => {
       ?.checked;
     if (typeof newChecked !== "boolean") return;
     switch (args.widget_key) {
+      case "allFiles":
+        // Scope flip (§1). Push the new checked state back to the
+        // widget instance and rebuild the whole spec so the scope
+        // row + Replace All button label switch in lock-step. Then
+        // re-run the search so the results pane reflects the new
+        // scope (the search itself is project-wide; filtering
+        // happens in performSearch).
+        panel.allFiles = newChecked;
+        panel.widgetPanel?.setChecked("allFiles", newChecked);
+        updatePanelContent();
+        rerunSearchDebounced();
+        break;
       case "case":
         panel.caseSensitive = newChecked;
         panel.widgetPanel?.setChecked("case", newChecked);
@@ -1732,6 +1806,13 @@ editor.registerCommand(
   "%cmd.search_replace",
   "%cmd.search_replace_desc",
   "start_search_replace",
+  null
+);
+
+editor.registerCommand(
+  "%cmd.search_replace_in_buffer",
+  "%cmd.search_replace_in_buffer_desc",
+  "start_search_replace_in_buffer",
   null
 );
 

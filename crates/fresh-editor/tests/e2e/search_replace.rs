@@ -41,19 +41,20 @@ fn create_test_files(project_root: &std::path::Path) {
 }
 
 /// Open command palette, find "Search and Replace in Project", execute it.
+/// Types the full project-scoped command name so the new "in Current File"
+/// variant (§1) doesn't get picked instead — both commands share the
+/// "Search and Replace" prefix and the palette would land on the first
+/// match if we only typed the prefix.
 fn open_search_replace_via_palette(harness: &mut EditorTestHarness) {
     harness
         .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
         .unwrap();
     harness.wait_for_prompt().unwrap();
 
-    harness.type_text("Search and Replace").unwrap();
+    harness.type_text("Search and Replace in Project").unwrap();
 
     harness
-        .wait_until(|h| {
-            let s = h.screen_to_string();
-            s.contains("Search and Replace") || s.contains("Search & Replace")
-        })
+        .wait_until(|h| h.screen_to_string().contains("Search and Replace in Project"))
         .unwrap();
 
     harness
@@ -302,6 +303,86 @@ fn test_search_replace_no_premature_no_matches_label() {
     assert!(
         !screen.contains("No matches"),
         "Should not show 'No matches' before a search has actually run. \
+         Got:\n{}",
+        screen
+    );
+}
+
+/// §1: opening via the "Search and Replace in Current File" command
+/// restricts the results to the active buffer. The scope row reads
+/// "Only in: alpha.txt", the Replace All button label includes the
+/// filename, and a pattern that matches in multiple files shows
+/// matches from alpha.txt only.
+#[test]
+fn test_search_replace_scope_current_file_only() {
+    init_tracing_from_env();
+    let (_temp_dir, project_root) = setup_search_replace_project();
+    create_test_files(&project_root);
+
+    let start_file = project_root.join("alpha.txt");
+    let mut harness =
+        EditorTestHarness::with_config_and_working_dir(160, 30, Default::default(), project_root)
+            .unwrap();
+    harness.open_file(&start_file).unwrap();
+    harness.render().unwrap();
+
+    // Open via palette → "Search and Replace in Current File".
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.wait_for_prompt().unwrap();
+    harness
+        .type_text("Search and Replace in Current File")
+        .unwrap();
+    harness
+        .wait_until(|h| {
+            h.screen_to_string()
+                .contains("Search and Replace in Current File")
+        })
+        .unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Search:"))
+        .unwrap();
+
+    // The scope row + restricted Replace All label are visible *before*
+    // any pattern is typed (they're rendered from PanelState.allFiles +
+    // sourceBufferRelPath, both set by openPanel).
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Only in: alpha.txt"),
+        "Scope row should read 'Only in: alpha.txt'. Got:\n{}",
+        screen
+    );
+    assert!(
+        screen.contains("Replace All in alpha.txt"),
+        "Replace-All button should be filename-scoped. Got:\n{}",
+        screen
+    );
+    assert!(
+        screen.contains("[ ] All Files"),
+        "All Files toggle should be unchecked. Got:\n{}",
+        screen
+    );
+
+    // Type a pattern that matches in both alpha.txt and beta.txt.
+    // Filter must drop the beta.txt match.
+    harness.type_text("hello").unwrap();
+    harness
+        .wait_until(|h| h.screen_to_string().contains("matches"))
+        .unwrap();
+
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("alpha.txt"),
+        "alpha.txt should appear in restricted results. Got:\n{}",
+        screen
+    );
+    assert!(
+        !screen.contains("beta.txt"),
+        "beta.txt must NOT appear when scope is restricted to alpha.txt. \
          Got:\n{}",
         screen
     );
