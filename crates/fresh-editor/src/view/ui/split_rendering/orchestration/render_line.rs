@@ -17,6 +17,7 @@ use super::super::spans::{
 use super::super::style::dim_color_for_tilde;
 use super::contexts::{DecorationContext, SelectionContext};
 use super::overlay_sweep::OverlayActiveSet;
+use super::selection_sweep::SelectionActiveSet;
 use crate::app::types::ViewLineMapping;
 use crate::primitives::ansi::AnsiParser;
 use crate::primitives::display_width::char_width;
@@ -170,21 +171,9 @@ pub(crate) fn render_view_lines(input: LineRenderInput<'_>) -> LineRenderOutput 
     // Cursors for O(1) amortized span lookups (spans are sorted by byte range)
     let mut hl_cursor = 0usize;
     let mut sem_cursor = 0usize;
-    // Selection cursor: `selection_ranges` is sorted by `start` in
-    // `selection_context`. Advance past ranges whose `end <= bp`; any
-    // remaining range with `start <= bp < end` covers `bp`. The non-advancing
-    // scan from `sel_cursor` is bounded by the (tiny) number of overlapping
-    // selections at a single byte.
-    let mut sel_cursor = 0usize;
-    // Block-selection active set: indices into `block_selections`, updated
-    // once per visible line as `gutter_num` advances. `block_next_idx`
-    // advances through the list (sorted by `start_line`) picking up entries
-    // whose `start_line <= gutter_num`; entries with `end_line < gutter_num`
-    // are dropped. Per cell, we scan only the active set for the column
-    // predicate instead of the full `block_selections` slice.
-    let mut active_block: Vec<usize> = Vec::new();
-    let mut block_next_idx: usize = 0;
-    let mut block_last_line: Option<usize> = None;
+    // Linear-range + block-rect selection sweep. The cell loop just
+    // asks `contains(byte_pos, byte_index)` — see SelectionActiveSet.
+    let mut selection_sweep = SelectionActiveSet::new(selection_ranges, block_selections);
 
     // Overlay sweep: O(1) amortised per cell, zero allocation per cell.
     // Line-sweep over the viewport overlays. See `OverlayActiveSet`
@@ -513,28 +502,9 @@ pub(crate) fn render_view_lines(input: LineRenderInput<'_>) -> LineRenderOutput 
                     })
                     .unwrap_or(false);
 
-                // Check if this character is in any selection range (but not at cursor position)
-                // Also check for block/rectangular selections (uses gutter_num which is
-                // the line number for small files — block_rects stores line numbers).
-                // Block active set is refreshed once per line as `gutter_num` advances.
-                if block_last_line != Some(gutter_num) {
-                    active_block.retain(|&i| block_selections[i].2 >= gutter_num);
-                    while block_next_idx < block_selections.len() {
-                        let (start_line, _, _, _) = block_selections[block_next_idx];
-                        if start_line > gutter_num {
-                            break;
-                        }
-                        if block_selections[block_next_idx].2 >= gutter_num {
-                            active_block.push(block_next_idx);
-                        }
-                        block_next_idx += 1;
-                    }
-                    block_last_line = Some(gutter_num);
-                }
-                let is_in_block_selection = active_block.iter().any(|&i| {
-                    let (_, start_col, _, end_col) = block_selections[i];
-                    byte_index >= start_col && byte_index <= end_col
-                });
+                // Refresh the block-rect active set for this row.
+                // Idempotent on the same gutter line (no inner gate).
+                selection_sweep.enter_line(gutter_num);
 
                 // For primary cursor in active split, terminal hardware cursor provides
                 // visual indication, so we can still show selection background.
@@ -544,21 +514,8 @@ pub(crate) fn render_view_lines(input: LineRenderInput<'_>) -> LineRenderOutput 
                 let is_primary_cursor = is_cursor && byte_pos == Some(primary_cursor_position);
                 let exclude_from_selection = is_cursor && !(is_active && is_primary_cursor);
 
-                let is_selected = !exclude_from_selection
-                    && (byte_pos.is_some_and(|bp| {
-                        // Advance past selections ending before this byte.
-                        while sel_cursor < selection_ranges.len()
-                            && selection_ranges[sel_cursor].end <= bp
-                        {
-                            sel_cursor += 1;
-                        }
-                        // From sel_cursor onwards, ranges are sorted by start.
-                        // Stop as soon as a range starts after bp.
-                        selection_ranges[sel_cursor..]
-                            .iter()
-                            .take_while(|r| r.start <= bp)
-                            .any(|r| r.end > bp)
-                    }) || is_in_block_selection);
+                let is_selected =
+                    !exclude_from_selection && selection_sweep.contains(byte_pos, byte_index);
 
                 // Compute character style using helper function
                 // char_styles is indexed by character position, not visual column
