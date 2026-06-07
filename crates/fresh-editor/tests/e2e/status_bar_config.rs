@@ -168,7 +168,7 @@ fn test_compact_cursor_format() {
 /// the same column before and after a cursor move.
 #[test]
 fn test_cursor_indicator_width_is_stable_across_cursor_movement() {
-    let config = config_with_status_bar(
+    let mut config = config_with_status_bar(
         vec![
             StatusBarElement::Filename,
             StatusBarElement::Cursor,
@@ -176,6 +176,9 @@ fn test_cursor_indicator_width_is_stable_across_cursor_movement() {
         ],
         vec![],
     );
+    // Use an explicit `|` separator so the Language element has a stable
+    // anchor to assert against; the default separator is padding-only.
+    config.editor.status_bar.separator = " | ".to_string();
 
     let mut harness = EditorTestHarness::with_temp_project_and_config(160, 30, config).unwrap();
 
@@ -284,7 +287,7 @@ fn test_remote_indicator_placed_at_far_left() {
 /// Encoding and Language appeared concatenated (e.g. "LF UTF-8 Rust").
 #[test]
 fn test_right_side_separators() {
-    let config = config_with_status_bar(
+    let mut config = config_with_status_bar(
         vec![StatusBarElement::Filename, StatusBarElement::Cursor],
         vec![
             StatusBarElement::LineEnding,
@@ -292,6 +295,9 @@ fn test_right_side_separators() {
             StatusBarElement::Language,
         ],
     );
+    // The default separator is padding-only; set an explicit `|` so this
+    // test can assert the separator is applied between right-side elements.
+    config.editor.status_bar.separator = " | ".to_string();
 
     let mut harness = EditorTestHarness::with_temp_project_and_config(120, 30, config).unwrap();
 

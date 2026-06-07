@@ -4270,13 +4270,15 @@ fn test_review_branch_detail_pane_page_down_works() {
         .wait_until(|h| {
             let s = h.screen_to_string();
             // The detail panel's status line looks like
-            //   `*detail* [RO] | Ln <N>, Col <M> | ...`
+            //   `*detail* [RO]  Ln <N>, Col <M>  ...`
             // We only care that N is no longer 1 (i.e. paging actually
-            // moved the cursor). Match "| Ln 2" / "Ln 3" / … without
-            // accidentally matching the old "Ln 1".
+            // moved the cursor). Match " Ln 2" / " Ln 3" / … without
+            // accidentally matching the old " Ln 1". The leading space
+            // anchors to the element padding (the default status-bar
+            // separator is padding-only, not "|").
             let has_detail = s.contains("*detail* [RO]");
             let moved = [
-                "| Ln 2", "| Ln 3", "| Ln 4", "| Ln 5", "| Ln 6", "| Ln 7", "| Ln 8", "| Ln 9",
+                " Ln 2", " Ln 3", " Ln 4", " Ln 5", " Ln 6", " Ln 7", " Ln 8", " Ln 9",
             ]
             .iter()
             .any(|prefix| s.contains(prefix));
