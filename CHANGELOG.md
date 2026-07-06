@@ -13,6 +13,8 @@ For live updates on Fresh, [follow me on X](https://x.com/TheNoamLewis).
 
 ### Bug Fixes
 
+* **Cursor movement**: vertical navigation now keeps its goal column in several cases where it previously drifted — descending at column 0 through an indented, soft-wrapped line; batched off-screen up/down moves over short unwrapped lines (#2565); and blank lines inside an indented block that carry indentation guides (#2564).
+* **LSP**: an explicitly empty `args` list now replaces a built-in server's default arguments instead of being treated as unset, so you can swap in a server that takes no arguments (e.g. markdown-oxide in place of marksman) (#2549, reported by @alex-ball).
 * **Markdown compose**: fixed table corruption under rapid edits ("edit storms") — table borders are now per-line decorations, and plugin coordinates are remapped through an edit epoch so markers no longer drift (#2479, #2484).
 * **Orchestrator**: clicking a dock row focuses the activated window (#2521).
 * The startup **wave animation** is now dismissable in daemon mode (#2530, reported by @muesli).
@@ -28,7 +30,9 @@ For live updates on Fresh, [follow me on X](https://x.com/TheNoamLewis).
   * stay visible when opening a file at a commit from **Git Log**.
 * **Settings**:
   * language-entry field edits keep their committed value (including **Tab Size**), and `Esc` now cancels an in-progress edit while `Enter`/`Tab` commit it (#2537);
-  * committing a text field with `Tab` persists the typed value on Save, matching `Enter` — previously the row showed as modified but Save wrote an empty value (#2515).
+  * committing a text field with `Tab` persists the typed value on Save, matching `Enter` — previously the row showed as modified but Save wrote an empty value (#2515);
+  * the **search filter** now supports full text-cursor editing — arrow keys, Home/End, and grapheme-aware mid-string insert/delete — and `Ctrl`/`Alt` chords no longer type a literal character into it;
+  * the **Env** detector list labels each row by name (`.venv`, `direnv`, `mise`, …) instead of showing `(no action)`.
 
 ### Internals
 
